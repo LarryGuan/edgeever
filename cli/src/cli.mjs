@@ -1,10 +1,11 @@
+import { discoverWorkspace, matchingProfile, summarizeSync } from "./workspace-context.mjs";
 import { validateRemoteBody } from "./file-workspace/metadata.mjs";
 import { updateMemo } from "./publish.mjs";
 import { createNotebook } from "./notebooks.mjs";
 import { manageSkills, packageVersion } from "./skills.mjs";
 import { interactiveResolve, editDraft } from "./file-workspace/interactive.mjs";
 import { resourceTransport } from "./file-workspace/http.mjs";
-import { link as linkWorkspace, status as workspaceStatus, sync as syncWorkspace, resolveConflict, conflicts, uploads, retryUpload, migrate, importFile } from "./file-workspace/core.mjs";
+import { link as linkWorkspace, status as workspaceStatus, sync as syncWorkspace, bindDirectory, gcWorkspace, resolveConflict, conflicts, uploads, retryUpload, migrate, importFile } from "./file-workspace/core.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -20,6 +21,7 @@ const usage = `EdgeEver CLI
 
 Usage:
   edgeever --version
+  edgeever sync [directory] [--auto-merge] [--pull-only] [--dry-run] [--json]
   edgeever skill install --target codex|claude|kimi|all
   edgeever skill status [--target codex|claude|kimi|all]
   edgeever skill update --target codex|claude|kimi|all [--force]
@@ -40,11 +42,13 @@ Usage:
   edgeever --profile <name> export <memoId> [--format markdown|json] [--out <path>]
 
 File workspace (server must support /api/v1/file-workspace):
-  edgeever workspace link <directory> --notebooks id1,id2 [--exclude id3] [--shallow]
+  edgeever workspace link <directory> --notebooks id1,id2 [--exclude id3] [--shallow] [--at <relative-directory>]
   edgeever workspace link <directory> --all [--exclude id3]
   edgeever workspace link <directory> --notebooks id1 --replace-scope
   edgeever workspace migrate <directory> [--dry-run]
-  edgeever workspace import <directory> --file <path> --notebook <id> [--title <title>] [--memo <confirmed-id>]
+  edgeever workspace bind <directory> --notebook <id> --path <relative-directory> [--dry-run]
+  edgeever workspace gc <directory> [--dry-run] [--days <30>] [--keep <5>] [--max-bytes <budget>]
+  edgeever workspace import <directory> --file <path> --notebook <id> [--title <title>] [--memo <confirmed-id>] [--bind-directory]
   edgeever workspace uploads <directory>
   edgeever workspace retry-upload <directory> --key <key>
   edgeever workspace resolve <directory> --memo <id> --use local|remote|merge
@@ -82,7 +86,34 @@ const main = async () => {
   if (command === "workspace" && argv[0] === "status") {
     return printJson(await workspaceStatus(argv[1] || "."));
   }
-  const client = await createClient(globalOptions.profile);
+  if (command === "sync") {
+    const options=parseOptions(argv);
+    const context=await discoverWorkspace(argv[0]&&!argv[0].startsWith('--')?argv[0]:'.');
+    const profile=globalOptions.profile || (process.env.EDGEEVER_TOKEN ? undefined : matchingProfile(await readConfig(),context.url));
+    const client=await createClient(profile);
+    const result=await syncWorkspace(context.directory,client,{dryRun:options['dry-run']==='true',pullOnly:options['pull-only']==='true',autoMerge:options['auto-merge']==='true'});
+    const summary=summarizeSync(result);
+    if(options.json==='true')printJson({...result,directory:context.directory,summary});
+    else {
+      const labels={clean:'未变化',pulled:'拉取',pushed:'上传',moved:'移动',untracked:'未跟踪',modified:'本地待上传',conflict:'冲突','directory-removed':'清理空目录','merged-local':'本地合并'};
+      console.log(`${result.dryRun?'同步预览':'同步完成'}: ${Object.entries(summary.counts).map(([status,count])=>`${labels[status]||status} ${count}`).join(', ')||'无笔记'}`);
+      for(const issue of summary.issues)console.log(`${issue.status}: ${issue.path||issue.notebookId||issue.id||''}${issue.error?' — '+issue.error:''}`);
+      if(summary.counts.untracked)console.log('未跟踪文件本次未导入。');
+      if(result.gc?.overBudget)console.log('必要备份仍超过空间预算；未强制删除。');
+    }
+    if(summary.issues.length)process.exitCode=2;
+    return;
+  }
+  if(command==='workspace'&&argv[0]==='gc') {
+    const options=parseOptions(argv.slice(2));const opts={dryRun:options['dry-run']==='true'};
+    for(const [flag,key] of [['days','days'],['keep','keep'],['max-bytes','maxBytes']])if(options[flag]!==undefined)opts[key]=Number(options[flag]);
+    return printJson(await gcWorkspace(argv[1]||'.',opts));
+  }
+  let profile=globalOptions.profile;
+  if(!profile&&!process.env.EDGEEVER_TOKEN&&command==='workspace'&&['sync','bind','migrate','resolve','import'].includes(argv[0])&&argv[1]) {
+    const context=await discoverWorkspace(argv[1]);profile=matchingProfile(await readConfig(),context.url);
+  }
+  const client = await createClient(profile);
   if (command === "workspace") {
     const [action, directory, ...rest] = argv;
     if (!directory || directory.startsWith("--")) throw new Error("A workspace directory is required");
@@ -93,10 +124,11 @@ const main = async () => {
         include: (options.notebooks || "").split(",").filter(Boolean),
         exclude: (options.exclude || "").split(",").filter(Boolean),
         recursive: options.shallow !== "true",
-      }, options["replace-scope"] === "true"));
+      }, options["replace-scope"] === "true", options.at !== undefined ? options.at : (options.notebooks && !options.notebooks.includes(",") && options["replace-scope"] !== "true" ? "." : undefined)));
     }
+    if (action === "bind") return printJson(await bindDirectory(directory, client, requireValue(options.notebook,"--notebook"), requireValue(options.path,"--path"), {dryRun:options["dry-run"]==="true"}));
     if (action === "migrate") return printJson(await migrate(directory, client, { dryRun: options["dry-run"] === "true" }));
-    if (action === "import") return printJson(await importFile(directory, client, { file: options.file, notebookId: options.notebook, title: options.title, memoId: options.memo }));
+    if (action === "import") return printJson(await importFile(directory, client, { file: options.file, notebookId: options.notebook, title: options.title, memoId: options.memo, bindDirectory:options["bind-directory"]==="true" }));
     if (action === "retry-upload") return printJson(await retryUpload(directory,client,requireValue(options.key,"--key")));
     if (action === "resolve") {
       const id = requireValue(options.memo, "--memo");

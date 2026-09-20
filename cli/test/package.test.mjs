@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, stat, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +27,7 @@ test('packed CLI installs independently and supports profiles, HTTP, files and c
     const bin = join(prefix, 'node_modules', 'knowledge-workbench-edgeever-cli', 'bin', 'edgeever.mjs');
     const run = async (...args) => (await exec(process.execPath, [bin, ...args], { cwd: root, env })).stdout;
     assert.match(await run('--help'), /edgeever workspace sync/);
-    assert.equal((await run('--version')).trim(), '0.6.1');
+    assert.equal((await run('--version')).trim(), '0.7.0');
     const installedSkills = JSON.parse(await run('skill', 'install', '--target', 'all'));
     assert.deepEqual(installedSkills.results.map(r => r.status), ['installed', 'installed', 'installed']);
     assert.deepEqual(JSON.parse(await run('skill', 'status')).results.map(r => r.status), ['current', 'current', 'current']);
@@ -131,11 +131,25 @@ test('packed CLI installs independently and supports profiles, HTTP, files and c
       await writeFile(join(upgrade, prior.path), encodeNote('LOCAL\n\nmiddle\n\nlast\n', memo.id));
       memo = { ...memo, revision: memo.revision + 1, contentMarkdown: 'first\n\nmiddle\n\nREMOTE\n' };
       await assert.rejects(oldRun('sync', upgrade, '--pull-only'), e => e.code === 2);
-      const merged = JSON.parse(await run('--profile', 'test', 'workspace', 'sync', upgrade, '--pull-only', '--auto-merge')).results[0];
-      assert.equal(merged.status, 'merged-local');
+      const originalIndex=await readFile(join(upgrade,'.edgeever/state.json'),'utf8');
+      assert.equal(JSON.parse(await run('workspace','migrate',upgrade,'--dry-run')).version,4);
+      assert.equal(await readFile(join(upgrade,'.edgeever/state.json'),'utf8'),originalIndex);
+      await run('workspace','migrate',upgrade);
+      const index=JSON.parse(await readFile(join(upgrade,'.edgeever/state.json'),'utf8'));
+      assert.equal(index.version,4);assert.equal(index.entries[memo.id].base,undefined);
+      await assert.rejects(oldRun('sync',upgrade,'--pull-only'),e=>/Unsupported workspace state/.test(e.stderr));
+      const merged=JSON.parse(await run('workspace','resolve',upgrade,'--memo',memo.id,'--use','merge'));
+      assert.equal(merged.overlaps,0);
+      await run('workspace','resolve',upgrade,'--memo',memo.id,'--continue');
       assert.equal(decodeNote(await readFile(join(upgrade, prior.path), 'utf8')).body, 'LOCAL\n\nmiddle\n\nREMOTE\n');
       assert.equal(JSON.parse(await run('workspace', 'status', upgrade))[0].status, 'modified');
     }
+    const quickWorkspace=process.env.EDGEEVER_PREVIOUS_TGZ?join(root,'upgrade'):workspace;
+    await mkdir(join(quickWorkspace,'nested/deep'),{recursive:true});
+    const brief=JSON.parse(await run('sync',join(quickWorkspace,'nested/deep'),'--json','--pull-only'));
+    assert.equal(brief.directory,quickWorkspace);assert.ok(brief.summary.counts.modified);
+    assert.match(await run('sync',quickWorkspace,'--pull-only'),/同步完成/);
+    assert.equal(JSON.parse(await run('workspace','gc',workspace,'--dry-run')).status,'gc-preview');
     capable = false;
     await assert.rejects(run('--profile', 'test', 'workspace', 'link', join(root, 'unsupported'), '--all'), e => e.code === 1 && /Server lacks/.test(e.stderr));
   } finally {

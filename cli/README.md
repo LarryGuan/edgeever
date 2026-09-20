@@ -1,5 +1,58 @@
 # EdgeEver CLI for Knowledge Workbench
 
+## Current workflow: CLI 0.7.0
+
+For an existing linked folder (or any child directory), run one command:
+
+```bash
+edgeever sync
+edgeever sync --pull-only --dry-run
+edgeever sync --auto-merge --json
+```
+
+The CLI discovers the nearest workspace upward and selects the unique authenticated profile whose server URL matches its index. Ambiguous/missing profiles require an explicit --profile or local configuration. Environment overrides still apply and workspace identity is checked. Human output summarizes the single run; --json includes counts and issues. Untracked files are reported, never automatically inspected/imported. Auto-merge is opt-in; ordinary sync still uploads local edits and downloads remote changes. No background watcher is added.
+
+### Upgrade once: reference-only state v4
+
+```bash
+edgeever workspace migrate ./notes --dry-run
+edgeever workspace migrate ./notes
+```
+
+Migration is explicit. Existing v1/v2 first pass through the document-format migration; v3 retains its paths and Markdown bytes while upgrading storage. Each index entry stores baseRef/serverBaseRef; `.edgeever/baselines/<sha256>.md` stores deduplicated content. Baselines are loaded lazily with hash checks. The scan keeps file identity/path metadata, not all note bodies. A single huge document or its three-way merge still needs memory; there is no streaming merge guarantee. Legacy JSON must be parsed once during upgrade.
+
+The original index is backed up under `.edgeever/migrations/storage-<id>/state.json`; referenced bodies are written before switching the index. A failed/interrupted write can be retried from the unchanged old index. Never remove referenced baseline files. Finish any older pending move with the previous CLI before storage migration. Earlier CLIs cannot read state v4. To roll back, preserve subsequent edits, restore original file paths/bytes if a layout migration also ran, and restore the pre-upgrade index plus any referenced baselines from a full backup. Keep the previous CLI package until upgrade is accepted.
+
+### Bind notebook directories and repair old nesting
+
+```bash
+# Mount a selected cloud notebook at the local workspace root:
+edgeever workspace bind ./notes --notebook NB_ROOT --path . --dry-run
+edgeever workspace bind ./notes --notebook NB_ROOT --path .
+# Bind a custom folder explicitly so future cloud notes land alongside imported files:
+edgeever workspace bind ./notes --notebook NB_CHILD --path 'Research'
+# Or establish the directory binding during a new import:
+edgeever workspace import ./notes --file 'Research/note.md' --notebook NB_CHILD --bind-directory
+```
+
+Fresh CLI links selecting exactly one notebook default to local `.`; --at chooses another relative directory. Core API/multi-root/all links retain full-tree layout unless explicitly bound. Existing scopes/paths do not silently change during storage migration. `bind` performs local layout migration only, returns an index backup path and per-file moves, retains original bytes in history and uses the existing move recovery journal. It does not import new notes or change remote content. Per-note local overrides are retained. Do not infer directory ownership from titles; bind each custom imported folder that needs cloud backfill. Names colliding with other local content receive numbered suffixes.
+
+Unpinned notebook renames and reparenting follow the cloud hierarchy on sync, including descendants. Explicit local mounts stay stable; their unpinned children still follow cloud names. Shape tracking starts when the new CLI first observes a workspace; older already-stale paths can be corrected by explicit bind. Empty retired managed directories are removed, while files/hidden files/unmanaged content remain. A selected root mounted at `.` is never deleted.
+
+### Storage cleanup
+
+```bash
+edgeever workspace gc ./notes --dry-run
+edgeever workspace gc ./notes
+edgeever workspace gc ./notes --days 30 --keep 5 --max-bytes 1073741824
+```
+
+Applying GC persists its policy; preview does not. A successful sync without blocked outcomes runs GC at most once per day. Default retention is 30 days and at least five history files per group (normally a memo). Current referenced baselines, active conflict groups, backup-referenced baselines and state-referenced history files are protected. Pending move/format recovery defers GC. Old unreferenced baselines, eligible histories, completed layout/storage migration snapshots and solved conflict groups can be removed. Whole snapshot groups expire together. References from backups are conservatively marked before deletion, so some newly unreferenced blobs wait for a later run. Legacy/unknown recovery artifacts may remain.
+
+GC never scans/deletes user note folders or attachment storage. The budget covers managed baseline/history/conflict/migration storage and reports overBudget rather than deleting required data. GC shares the workspace lock with sync, rejects symlinks and rechecks each candidate before deletion. Keep an independent backup for long-term rollback: expired backups are intentionally unrecoverable once GC removes them. Windows filesystem behavior remains unverified.
+
+Earlier version sections below describe historical changes; the v4 workflow above takes precedence.
+
 Standalone Node.js CLI extracted from the customized EdgeEver checkout. It uses the same implementation as the repository's legacy scripts. Requires Node.js 22 or newer; Bun, the server source tree and a build step are not required to run the installed package.
 
 ## Install locally (not published to npm)
@@ -10,7 +63,7 @@ From this directory:
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.6.1.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.7.0.tgz
 edgeever --help
 ```
 

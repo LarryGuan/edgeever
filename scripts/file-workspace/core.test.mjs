@@ -1,3 +1,4 @@
+import { loadState } from '../../cli/src/file-workspace/state.mjs';
 import { test, expect, beforeEach, afterEach } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { globSync, readFileSync } from 'node:fs';
@@ -50,7 +51,7 @@ beforeEach(async () => {
 });
 afterEach(async () => { sqlite.close(); await rm(root, { recursive: true, force: true }); });
 const create = async (body = '原文\n', notebookId = 'nb_child') => (await client.request('/api/v1/memos', { method: 'POST', body: { notebookId, title: '纪要', contentMarkdown: body } })).memo;
-const state = async () => JSON.parse(await readFile(join(root, '.edgeever/state.json'), 'utf8'));
+const state = async () => { const s=await loadState(root); s.entries=Object.fromEntries(Object.entries(s.entries).map(([id,e])=>[id,{...e,base:e.base,serverBase:e.serverBase}])); return s; };
 const editRemote = async (memo, text) => updateMemoRecord(storage.db, 'ws_default', memo.id, { contentMarkdown: text, expectedRevision: memo.revision }, { actorType: 'user', actorId: 'usr_test' }, 'test');
 
 test('real API smoke: link, pull, local edit, dry run, push, restart and search', async () => {
@@ -261,7 +262,7 @@ test('old v1 state with raw links upgrades without a spurious remote write',asyn
   const s=await state(),entry=s.entries[memo.id]; const remote=await getMemoDetail(storage.db,'ws_default',memo.id);
   s.version=1;delete s.resources;delete s.uploads;delete entry.serverBase;delete entry.serverHash;entry.base=remote.contentMarkdown;entry.hash=hash(entry.base);
   await rawWriteFile(join(root,entry.path),entry.base);await writeFile(join(root,'.edgeever/state.json'),JSON.stringify(s));
-  await expect(sync(root,client)).rejects.toThrow('migrate');await migrate(root,client);await sync(root,client);expect((await state()).version).toBe(3);
+  await expect(sync(root,client)).rejects.toThrow('migrate');await migrate(root,client);await sync(root,client);expect((await state()).version).toBe(4);
   expect((await getMemoDetail(storage.db,'ws_default',memo.id)).revision).toBe(remote.revision);
 });
 
@@ -366,7 +367,7 @@ test('v2 migration backs up local edits and baseline, dry-run writes nothing and
   await rm(join(root,entry.path));entry.path=old;s.version=2;delete s.notebookPaths;await writeFile(join(root,'.edgeever/state.json'),JSON.stringify(s));
   await rawWriteFile(join(root,'项目/纪要/纪要.md'),'untracked user file');
   const preview=await migrate(root,client,{dryRun:true});expect(preview.status).toBe('would-migrate');expect((await state()).version).toBe(2);expect(await readFile(join(root,old),'utf8')).toBe('local edit');
-  const result=await migrate(root,client);const current=await state();expect(current.version).toBe(3);expect(current.entries[memo.id].revision).toBe(entry.revision);
+  const result=await migrate(root,client);const current=await state();expect(current.version).toBe(4);expect(current.entries[memo.id].revision).toBe(entry.revision);
   expect(await readFile(join(root,'项目/纪要/纪要.md'),'utf8')).toBe('untracked user file');
   expect(await rawReadFile(join(root,result.backup,`files/${hash(memo.id)}.md`),'utf8')).toBe('local edit');
   expect(decodeNote(await rawReadFile(join(root,current.entries[memo.id].path),'utf8')).id).toBe(memo.id);
@@ -669,4 +670,45 @@ test('direct CLI body update uses the real required edit-session and preserves u
  expect((await getMemoDetail(storage.db,'ws_default',memo.id)).contentMarkdown).toBe(body);
  await expect(updateMemo(client,memo.id,{contentMarkdown:'---\nedgeever:\n  memo_id: PENDING\n---\nwrong'})).rejects.toThrow('reserved');
  expect((await getMemoDetail(storage.db,'ws_default',memo.id)).contentMarkdown).toBe(body);
+});
+
+test('explicit root binding migrates managed paths, preserves local edits and routes new cloud notes alongside them',async()=>{
+ const {bindDirectory}=await import('../../cli/src/file-workspace/core.mjs');
+ const memo=await create('baseline');await link(root,client,scope);await sync(root,client);const old=(await state()).entries[memo.id].path;
+ await writeFile(join(root,old),'local unsent');
+ const preview=await bindDirectory(root,client,'nb_parent','.',{dryRun:true});expect(preview.results.find(r=>r.id===memo.id).move.to).toBe('纪要/纪要.md');expect(await readFile(join(root,old),'utf8')).toBe('local unsent');
+ await bindDirectory(root,client,'nb_parent','.');const moved=(await state()).entries[memo.id];expect(moved.path).toBe('纪要/纪要.md');expect(await readFile(join(root,moved.path),'utf8')).toBe('local unsent');expect(moved.serverBase).toBe('baseline');
+ const fresh=await create('new remote');await sync(root,client,{pullOnly:true});expect((await state()).entries[fresh.id].path).toBe('纪要/纪要 (2).md');
+ await bindDirectory(root,client,'nb_parent','.');expect((await state()).entries[memo.id].path).toBe('纪要/纪要.md');
+});
+test('notebook rename and reparent move managed files with attachment links and no remote content writes',async()=>{
+ const memo=await create(),resource=await attach(memo,pdf,'shape.pdf','application/pdf');await editRemote(memo,`[file](${resource.url})`);await link(root,client,scope);await sync(root,client);const before=(await state()).entries[memo.id];
+ await client.request('/api/v1/notebooks/nb_child',{method:'PATCH',body:{name:'改名纪要',parentId:'nb_private'}});
+ const result=(await sync(root,client,{pullOnly:true})).results.find(r=>r.id===memo.id);expect(result.move.to).toBe('项目/私密/改名纪要/纪要.md');expect((await state()).entries[memo.id].revision).toBe(before.revision);expect((await status(root)).find(r=>r.id===memo.id).status).toBe('clean');
+});
+test('import with an explicit directory binding routes future remote notes to the existing folder',async()=>{
+ await link(root,client,scope);await mkdir(join(root,'My notes'));await writeFile(join(root,'My notes/first.md'),'first');
+ await importFile(root,client,{file:'My notes/first.md',notebookId:'nb_child',bindDirectory:true});
+ const memo=await create('cloud addition');await sync(root,client,{pullOnly:true});expect((await state()).entries[memo.id].path).toBe('My notes/纪要.md');
+});
+test('bound notebook renames keep its local mount and child paths stable',async()=>{
+ const {bindDirectory}=await import('../../cli/src/file-workspace/core.mjs');const memo=await create();await link(root,client,scope);await sync(root,client);await bindDirectory(root,client,'nb_parent','.');
+ const before=(await state()).entries[memo.id].path;await client.request('/api/v1/notebooks/nb_parent',{method:'PATCH',body:{name:'renamed root'}});await sync(root,client);expect((await state()).entries[memo.id].path).toBe(before);
+});
+test('v3 storage migration keeps local paths and metadata unchanged',async()=>{
+ const memo=await create('large\n'.repeat(10000));await link(root,client,scope);await sync(root,client);const s=await state(),entry=s.entries[memo.id],raw=await rawReadFile(join(root,entry.path),'utf8');s.version=3;
+ await rawWriteFile(join(root,'.edgeever/state.json'),JSON.stringify(s));await expect(sync(root,client)).rejects.toThrow('migrate');await migrate(root,client);expect((await state()).version).toBe(4);expect(await rawReadFile(join(root,entry.path),'utf8')).toBe(raw);expect((await sync(root,client)).results.find(r=>r.id===memo.id).status).toBe('clean');
+});
+
+test('GC shares the sync lock, preserves pending recovery and runs at most daily',async()=>{
+ const {gcWorkspace}=await import('../../cli/src/file-workspace/core.mjs');await create();await link(root,client,scope);await sync(root,client);
+ const timestamp=(await state()).lastGcAt;expect(timestamp>0).toBe(true);await sync(root,client);expect((await state()).lastGcAt).toBe(timestamp);
+ await rawWriteFile(join(root,'.edgeever/lock'),'busy');await expect(gcWorkspace(root)).rejects.toThrow('locked');await rm(join(root,'.edgeever/lock'));
+ await rawWriteFile(join(root,'.edgeever/pending-move.json'),'{}');expect((await gcWorkspace(root)).status).toBe('gc-deferred');
+});
+test('directory binding rejects ambiguity and protected paths without changing state',async()=>{
+ const {bindDirectory}=await import('../../cli/src/file-workspace/core.mjs');await create();await link(root,client,scope);await sync(root,client);await bindDirectory(root,client,'nb_parent','.');const before=await state();
+ await expect(bindDirectory(root,client,'nb_child','.')).rejects.toThrow('already bound');
+ await expect(bindDirectory(root,client,'nb_child','.Edgeever')).rejects.toThrow('relative workspace');
+ expect(await state()).toEqual(before);
 });

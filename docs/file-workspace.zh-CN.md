@@ -1,5 +1,58 @@
 # CLI 本地 Markdown 工作目录（正文与附件）
 
+## 当前流程：CLI 0.7.0
+
+在已链接的目录或其子目录中，只需运行一次：
+
+```bash
+edgeever sync
+edgeever sync --pull-only --dry-run
+edgeever sync --auto-merge --json
+```
+
+CLI 向上寻找最近的 workspace，按索引里的服务器地址匹配唯一的已认证 profile。存在歧义或没有匹配项时，需显式 --profile 或本机配置。环境变量仍有覆盖作用，实例身份仍会校验。人类输出是单次运行的摘要，--json 含计数和异常。未跟踪文件只提示，不自动读取/导入。自动合并需 --auto-merge 显式启用；普通 sync 仍会上传本地修改、下载远端变化。本版没有后台监听。
+
+### 一次性升级：只存引用的 v4 状态
+
+```bash
+edgeever workspace migrate ./资料 --dry-run
+edgeever workspace migrate ./资料
+```
+
+升级是显式操作。v1/v2 先走原文档格式迁移；v3 升级存储时保留路径和 Markdown 原文。每条索引存 baseRef/serverBaseRef，正文去重后放入 `.edgeever/baselines/<sha256>.md`，使用时按需读取并验证哈希。目录扫描只保留身份和路径信息，不驻留全库正文。单篇超大文档和三方合并仍需要内存，不保证流式合并；升级时也必须先解析一次旧 JSON。
+
+原索引备份在 `.edgeever/migrations/storage-<id>/state.json`，正文先落盘再切换索引；写入失败/中断后可从未切换的旧索引重试。不能删除仍被引用的基线。旧版未完成的 move 恢复应先用旧 CLI 完成，再迁移存储。旧 CLI 不支持 v4。回滚前保留新增修改；如果也迁移过布局，应恢复原路径/文件，再恢复旧索引及其引用的基线，宜使用完整目录备份。升级验收前保留旧 CLI 安装包。
+
+### 绑定笔记本目录与修复旧嵌套
+
+```bash
+# 将已选择的云端笔记本挂到本地根目录：
+edgeever workspace bind ./资料 --notebook NB_ROOT --path . --dry-run
+edgeever workspace bind ./资料 --notebook NB_ROOT --path .
+# 明确绑定已有自定义文件夹，后续云端新增笔记才落在导入文件旁：
+edgeever workspace bind ./资料 --notebook NB_CHILD --path '研究资料'
+# 也可以在导入新文档时建立目录绑定：
+edgeever workspace import ./资料 --file '研究资料/note.md' --notebook NB_CHILD --bind-directory
+```
+
+CLI 新链接单个笔记本时默认绑定本地 `.`，--at 可指定相对目录；多根/all 链接及未指定绑定的核心 API 保留整树布局。存储迁移不会默默改变已有范围或目录。bind 只迁移本地布局，返回索引备份位置与逐文件搬迁结果，原文件保留在 history，沿用 move 恢复日志；不会导入新笔记或改云端正文。单篇文件的本地位置覆盖继续保留。不要根据标题猜目录归属：需要接收云端新增笔记的自定义导入目录，应逐个绑定；与其他本地内容重名时用序号避让。
+
+没有固定本地挂载点的笔记本，在云端改名/更换父级后，sync 会跟随调整其及后代的本地路径。明确绑定的挂载点保持稳定，其未单独绑定的子目录仍跟随云端名称。结构变化基线从新版首次观察工作区开始记录；升级前已经不一致的旧路径可通过显式 bind 修复。过时的受管空目录会清理，有文件/隐藏文件/非受管内容则保留，挂载到 `.` 的根目录不会删除。
+
+### 空间清理
+
+```bash
+edgeever workspace gc ./资料 --dry-run
+edgeever workspace gc ./资料
+edgeever workspace gc ./资料 --days 30 --keep 5 --max-bytes 1073741824
+```
+
+执行清理会保存策略，预览不会。没有阻塞事项的成功 sync 最多每天自动清理一次。默认保留 30 天，且每个历史分组（通常对应一篇笔记）至少保留最新 5 份。当前引用的基线、活动冲突组、备份引用的基线及状态引用的历史文件受保护；有待恢复 move/格式迁移时推迟清理。可删除过期无引用基线、符合策略的历史、已完成布局/存储迁移快照及已解决冲突组；整组快照一起过期。清理前会保守标记备份引用，因此部分新变成无引用的正文需要下次才回收，旧版/未知恢复资料也可能保留。
+
+GC 不扫描或删除用户笔记目录和附件仓库。空间预算针对受管基线/历史/冲突/迁移资料，必要数据超预算时只报告 overBudget，不强删。GC 与同步共用锁，拒绝符号链接，删除前再次核对候选文件。需要长期回滚时应另存完整备份：被 GC 清理的过期备份不能恢复。Windows 文件系统行为尚未实测。
+
+下方旧版本章节仅作历史记录，新版 v4 工作流以上述说明为准。
+
 独立 Node.js/npm 安装方式见 [CLI 中文说明](../cli/README.zh-CN.md)。安装后将下文的 `bun scripts/edgeever.mjs` 换成 `edgeever`；原脚本入口仍然兼容。
 
 对应英文：[File workspace](file-workspace.md)。

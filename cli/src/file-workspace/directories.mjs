@@ -9,6 +9,7 @@ export async function cleanupDirectories(root, state, notebooks, dryRun = false,
   const livePaths = new Set(mappings.filter(([id]) => live.has(id)).map(([,path]) => path));
   const removed = new Set(), results = [];
   for (const [id, path] of mappings.filter(([id]) => !live.has(id)).sort((a,b) => b[1].split('/').length - a[1].split('/').length)) {
+    if (path === '.' || Object.values(state.directoryBindings || {}).includes(path)) { results.push({notebookId:id,path,status:'directory-retained-binding'}); continue; }
     if (!path || posix.normalize(path) !== path || path === '.' || path.startsWith('/') || path.split('/').includes('..') || path.split('/').includes('.edgeever')) throw Error('Invalid managed notebook directory');
     if (livePaths.has(path)) { results.push({ notebookId:id, path, status:'directory-retained-shared' }); continue; }
     const target = await safePath(root,path);

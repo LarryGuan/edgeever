@@ -14,9 +14,9 @@ export async function scanNotes(root, state) {
       else if (/\.md$/i.test(path)) {
         const raw = await read(root, path);
         try {
-          const note = { path, raw, ...decodeNote(raw) }; files.set(path, note);
+          const note = { path, id:decodeNote(raw).id }; files.set(path, note);
           if (note.id) ids.set(note.id, [...(ids.get(note.id) || []), note]);
-        } catch (error) { files.set(path, { path, raw, error: error.message }); }
+        } catch (error) { files.set(path, { path, error: error.message }); }
       }
     }
   }
@@ -63,13 +63,52 @@ export async function notebookDirectory(root, id, notebooks, state, reserved = n
   const map = new Map(notebooks.map(n => [n.id, n]));
   const seen = new Set();
   async function directory(id) {
-    if (state.notebookPaths[id]) return state.notebookPaths[id];
+    if (state.directoryBindings?.[id] !== undefined) {
+      const bound=state.directoryBindings[id];
+      if(typeof bound!=='string'||!bound||posix.isAbsolute(bound)||posix.normalize(bound)!==bound||bound.split('/').some(p=>p==='..'||p.toLowerCase()==='.edgeever'))throw Error('Invalid notebook directory binding');
+      await safePath(root,bound);state.notebookPaths[id]=bound;return bound;
+    }
+    if (state.notebookPaths[id] !== undefined) return state.notebookPaths[id];
     if (seen.has(id)) throw Error('Notebook cycle'); seen.add(id);
     const notebook = map.get(id); if (!notebook) throw Error(`Notebook not found: ${id}`);
     const parent = notebook.parentId ? await directory(notebook.parentId) : '';
     const used = new Set([...reserved, ...Object.values(state.notebookPaths).map(p => p.toLowerCase())]);
-    const path = await availablePath(root, posix.join(parent, safeName(notebook.name)), used, true);
+    const desired = posix.join(parent, safeName(notebook.name));
+    const previous=state.layoutPreviousPaths?.[id];
+    const path = previous && posix.dirname(previous.path) === (parent || '.') && safeName(previous.name) === safeName(notebook.name) ? previous.path : await availablePath(root, desired, used, true);
     state.notebookPaths[id] = path; return path;
   }
   return directory(id);
+}
+
+export function refreshNotebookLayout(state, notebooks) {
+  const map = new Map(notebooks.map(n => [n.id,n]));
+  const previous = state.notebookShape || {};
+  const changed = new Set(state.layoutInvalidated || []);
+  for (const [id, shape] of Object.entries(previous)) {
+    const current = map.get(id);
+    if (current && (shape.name !== current.name || shape.parentId !== current.parentId)) changed.add(id);
+  }
+  const affected = id => {
+    const seen = new Set();
+    while (id && !seen.has(id)) { if(changed.has(id)) return true;seen.add(id);id=map.get(id)?.parentId; }
+    return false;
+  };
+  state.retiredNotebookPaths ??= [];
+  state.layoutPreviousPaths ??= {};
+  for(const [id,path] of Object.entries(state.notebookPaths || {})) if(affected(id)) {
+    state.layoutPreviousPaths[id]={path,name:previous[id]?.name || map.get(id)?.name};
+    if(path!=='.' && !state.retiredNotebookPaths.includes(path)) state.retiredNotebookPaths.push(path);
+    delete state.notebookPaths[id];
+  }
+  state.notebookShape = Object.fromEntries(notebooks.map(n=>[n.id,{name:n.name,parentId:n.parentId}]));
+  delete state.layoutInvalidated;
+}
+
+export async function readIdentifiedNote(root, path, id) {
+  const raw=await read(root,path);
+  if(raw===null)throw Error('Local file disappeared during sync');
+  const note=decodeNote(raw);
+  if(note.id!==id)throw Error('Local identity changed during sync');
+  return {path,raw,...note};
 }

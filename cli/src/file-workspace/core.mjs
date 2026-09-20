@@ -1,13 +1,15 @@
+import { collectGarbage } from './gc.mjs';
+import { loadState, saveState, migrateStorage } from './state.mjs';
 import { cleanupDirectories } from './directories.mjs';
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readFile, readdir, unlink } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, unlink, rmdir } from 'node:fs/promises';
 import { resolve, posix } from 'node:path';
 import { hash, safeName, safePath, read, atomic, installFile } from './files.mjs';
 export { hash, safePath } from './files.mjs';
 import { attachmentContext, normalizeRemote, relocateAttachments } from './attachments.mjs';
 
 import { decodeNote, encodeNote } from './metadata.mjs';
-import { scanNotes, availablePath, notebookDirectory } from './layout.mjs';
+import { scanNotes, availablePath, notebookDirectory, refreshNotebookLayout, readIdentifiedNote } from './layout.mjs';
 import { migrateWorkspace } from './migration.mjs';
 import { moveNote, resumeMove, moveJournal } from './moves.mjs';
 import { mergeText, hasConflictMarkers } from './merge.mjs';
@@ -20,21 +22,7 @@ async function locked(root, fn) {
   try { await lock.writeFile(JSON.stringify({ pid: process.pid })); return await fn(); }
   finally { await lock.close(); await unlink(path); }
 }
-async function load(root) {
-  const text = await read(root, '.edgeever/state.json');
-  if (!text) throw Error('Not linked. Run workspace link first.');
-  const state = JSON.parse(text);
-  if (![1, 2, 3].includes(state.version) || !state.entries || !state.scope) throw Error('Unsupported workspace state');
-  return state;
-}
-const save = async (root, state) => {
-  if (state.version === 1) {
-    const old = await read(root, '.edgeever/state.json');
-    if (old && !await read(root, '.edgeever/state-v1.backup.json')) await atomic(root, '.edgeever/state-v1.backup.json', old);
-    state.version = 2;
-  }
-  return atomic(root, '.edgeever/state.json', JSON.stringify(state, null, 2) + '\n');
-};
+const load = loadState, save = saveState;
 export function selectNotebooks(notebooks, scope) {
   const map = new Map(notebooks.map(n => [n.id, n]));
   for (const id of [...scope.include, ...scope.exclude]) if (!map.has(id)) throw Error(`Notebook not found: ${id}`);
@@ -54,7 +42,7 @@ async function identity(client, state) {
   if (state && (state.url !== client.baseUrl || state.workspaceId !== info.workspaceId)) throw Error('Server/workspace mismatch. Refusing to mix accounts.');
   return info;
 }
-export async function link(root, client, scope, replace = false) {
+export async function link(root, client, scope, replace = false, rootAt) {
   return locked(root, async () => {
     const info = await identity(client);
     if (!scope.all && !scope.include.length) throw Error('Choose --all or --notebooks id1,id2');
@@ -64,20 +52,26 @@ export async function link(root, client, scope, replace = false) {
     let state;
     if (await read(root, '.edgeever/state.json')) {
       if (!replace) throw Error('Already linked. Use --replace-scope to change selection without deleting files.');
-      state = await load(root); await identity(client, state); await requireV3(root, state);
-    } else state = { version: 3, url: client.baseUrl, workspaceId: info.workspaceId, entries: {} };
+      state = await load(root); await identity(client, state); await requireCurrent(root, state);
+    } else state = { version: 4, url: client.baseUrl, workspaceId: info.workspaceId, entries: {} };
     state.scope = scope;
+    if (rootAt !== undefined) {
+      if (posix.isAbsolute(rootAt)||!rootAt||posix.normalize(rootAt)!==rootAt||rootAt.split("/").some(p=>p===".."||p.toLowerCase()===".edgeever")) throw Error("Invalid root binding path");
+      await safePath(root,rootAt);
+      if (scope.all || scope.include.length !== 1) throw Error("Root binding requires exactly one notebook");
+      state.directoryBindings = { ...(state.directoryBindings || {}), [scope.include[0]]:rootAt };
+    }
     await save(root, state);
     return { linked: true, notebooks: selected.size, directory: resolve(root), next: 'workspace sync' };
   });
 }
-async function requireV3(root, state, allowPendingMove = false) {
+async function requireCurrent(root, state, allowPendingMove = false) {
   if (!allowPendingMove && await read(root, moveJournal)) throw Error("Pending move: run workspace sync to resume first");
-  if (state.version !== 3 || await read(root, '.edgeever/migration-v3.json')) throw Error('Run workspace migrate first (use --dry-run to preview); old files and baselines will be backed up.');
+  if (state.version !== 4 || await read(root, '.edgeever/migration-v3.json')) throw Error('Run workspace migrate first (use --dry-run to preview); old files and baselines will be backed up.');
 }
 async function localStatus(root, state) {
   if (await read(root, moveJournal)) return [{ status: 'move-recovery-required', next: 'workspace sync' }];
-  if (state.version !== 3 || await read(root, '.edgeever/migration-v3.json')) return [{ status: 'migration-required', version: state.version }];
+  if (state.version !== 4 || await read(root, '.edgeever/migration-v3.json')) return [{ status: 'migration-required', version: state.version }];
   const scan = await scanNotes(root, state);
   const results = [...scan.problems];
   for (const [id, entry] of Object.entries(state.entries)) {
@@ -86,7 +80,8 @@ async function localStatus(root, state) {
     if (!note) continue;
     let name = 'clean';
     try {
-      const body = await relocateAttachments(root, note.body, entry.path, note.path, true);
+      const current = await readIdentifiedNote(root,note.path,id);
+      const body = await relocateAttachments(root, current.body, entry.path, note.path, true);
       const planned = await attachmentContext(root, { baseUrl: state.url }, state, async () => {}, true).prepare(body, note.path, id);
       if (planned.content !== await normalizeRemote(entry.serverBase ?? entry.base, state.url)) name = 'modified';
       else if (note.path !== entry.path) name = 'moved';
@@ -101,13 +96,21 @@ export const status = async root => localStatus(root, await load(root));
 export async function migrate(root, client, options = {}) {
   return locked(root, async () => {
     const state = await load(root); await identity(client, state);
-    return migrateWorkspace(root, state, options);
+    if (await read(root, moveJournal)) throw Error('Pending move: resume with the previous CLI before storage migration');
+    let files;
+    if (state.version < 3 || await read(root, '.edgeever/migration-v3.json')) {
+      files = await migrateWorkspace(root, state, options);
+      if (options.dryRun) return { ...files, version:4 };
+    }
+    const storage = await migrateStorage(root, files ? await load(root) : state, options.dryRun);
+    return files ? { ...files, version:4, storage } : storage;
   });
 }
 
 async function locate(root, state, scan, id, dryRun) {
-  const entry = state.entries[id], note = scan.ids.get(id)?.[0];
-  if (!entry || !note || scan.blocked.has(id)) throw Error('Cannot locate a unique bound memo');
+  const entry = state.entries[id], matched = scan.ids.get(id)?.[0];
+  if (!entry || !matched || scan.blocked.has(id)) throw Error('Cannot locate a unique bound memo');
+  const note = await readIdentifiedNote(root,matched.path,id);
   let body = note.body;
   if (note.path !== entry.path) {
     body = await relocateAttachments(root, body, entry.path, note.path, true);
@@ -139,9 +142,9 @@ async function snapshot(client, selected) {
 }
 const isDiagram = body => /edgeever.diagram|edgeever-diagram/i.test(body);
 
-export async function sync(root, client, { dryRun = false, pullOnly = false, autoMerge = false } = {}) {
+export async function sync(root, client, { dryRun = false, pullOnly = false, autoMerge = false, layoutOnly = false, previewState } = {}) {
   return locked(root, async () => {
-    const state = await load(root); await identity(client, state); await requireV3(root, state, true);
+    const state = previewState || await load(root); await identity(client, state); await requireCurrent(root, state, true);
     if (await read(root, moveJournal)) {
       if (dryRun) throw Error('Pending move: run workspace sync without --dry-run to resume');
       await resumeMove(root, state, save);
@@ -150,6 +153,7 @@ export async function sync(root, client, { dryRun = false, pullOnly = false, aut
     const moves = new Map();
     const attachments = attachmentContext(root, client, state, () => save(root,state), dryRun);
     const { notebooks } = await client.request('/api/v1/notebooks');
+    refreshNotebookLayout(state, notebooks);
     const liveIds = new Set(notebooks.map(n => n.id));
     const selected = selectNotebooks(notebooks, { ...state.scope, include: state.scope.include.filter(id => liveIds.has(id)), exclude: state.scope.exclude.filter(id => liveIds.has(id)) });
     const remote = await snapshot(client, selected);
@@ -169,7 +173,7 @@ export async function sync(root, client, { dryRun = false, pullOnly = false, aut
           path = located.path; local = located.body; localRaw = located.raw;
           // v0.3 may already have updated notebookId while retaining the old path.
           // Reconcile managed directories too; preserve explicit local relocation.
-          const managed = !entry.localPathOverride && (memo.notebookId !== entry.notebookId || Object.values(state.notebookPaths || {}).includes(posix.dirname(path)));
+          const managed = !entry.localPathOverride && (memo.notebookId !== entry.notebookId || [...Object.values(state.notebookPaths || {}), ...(state.retiredNotebookPaths || [])].includes(posix.dirname(path)));
           if (managed) {
             const directory = await notebookDirectory(root, memo.notebookId, notebooks, state, reserved);
             if (directory !== posix.dirname(path)) {
@@ -177,7 +181,7 @@ export async function sync(root, client, { dryRun = false, pullOnly = false, aut
               const body = await relocateAttachments(root, local, path, target);
               const base = await relocateAttachments(root, entry.base, path, target);
               await attachments.prepare(body, target, id);
-              const nextEntry = { ...entry, path: target, notebookId: memo.notebookId, base, hash: hash(base) };
+              const nextEntry = { ...entry, serverBase: entry.serverBase, path: target, notebookId: memo.notebookId, base, hash: hash(base) };
               const after = encodeNote(body, id);
               if (!dryRun) await moveNote(root, state, { id, from: path, to: target, before: localRaw, after, entry: nextEntry }, save);
               moves.set(id, { from: path, to: target });
@@ -191,11 +195,13 @@ export async function sync(root, client, { dryRun = false, pullOnly = false, aut
           results.push({ id, path: entry.path, status: 'attachment-error', error: error.message }); continue;
         }
       } else {
+        if (layoutOnly) continue;
         const directory = await notebookDirectory(root, memo.notebookId, notebooks, state, reserved);
         path = await availablePath(root, posix.join(directory, `${safeName(memo.title || 'untitled')}.md`), reserved);
         localRaw = await read(root, path); local = null;
         if (localRaw !== null) { results.push({ id, path, status: 'path-occupied' }); continue; }
       }
+      if (layoutOnly) { results.push({ id, path, status:'clean' }); continue; }
       const remoteBody = memo.contentMarkdown;
       if (typeof remoteBody !== 'string' || !Number.isInteger(memo.revision)) throw Error('Invalid memo response');
       // Refuse a reserved server metadata key before downloading or uploading attachments.
@@ -280,8 +286,24 @@ export async function sync(root, client, { dryRun = false, pullOnly = false, aut
       results.push(...await cleanupDirectories(root, state, latest.notebooks, dryRun, new Set([...moves.values()].map(move => move.from))));
       if (!dryRun) await save(root, state);
     }
+    const activeDirs = new Set([...Object.values(state.notebookPaths || {}), ...Object.values(state.directoryBindings || {})]);
+    for (const path of [...(state.retiredNotebookPaths || [])].sort((a,b)=>b.split('/').length-a.split('/').length)) {
+      if(path==='.' || activeDirs.has(path)) continue;
+      try {
+        if (!dryRun) await rmdir(await safePath(root,path));
+        else if ((await readdir(await safePath(root,path))).length) continue;
+        results.push({path,status:dryRun?'would-remove-directory':'directory-removed'});
+        if(!dryRun) state.retiredNotebookPaths=state.retiredNotebookPaths.filter(p=>p!==path);
+      } catch(e) { if (!['ENOENT','ENOTEMPTY','EEXIST'].includes(e.code)) throw e; }
+    }
+    if (!dryRun) await save(root, state);
     for (const id of state.scope.include.filter(id => !liveIds.has(id))) results.push({ notebookId:id, status:'scope-notebook-missing' });
-    return { dryRun, results: results.map(result => {
+    let gc;
+    if (!dryRun && !layoutOnly && Date.now() - (state.lastGcAt || 0) > 86400000 && results.every(r => ['clean','pulled','pushed','untracked','directory-removed','merged-local'].includes(r.status))) {
+      gc = await collectGarbage(root,state,state.gcPolicy || {});
+      if(gc.status==='gc-complete') {state.lastGcAt=Date.now();await save(root,state);}
+    }
+    return { dryRun, gc, results: results.map(result => {
       const move = moves.get(result.id);
       return move ? { ...result, move, status: result.status === 'clean' ? (dryRun ? 'would-move' : 'moved') : result.status } : result;
     }) };
@@ -332,7 +354,7 @@ export async function resolveConflict(root, client, id, choice) {
   if (!['local', 'remote', 'merge', 'continue'].includes(choice)) throw Error('Choose --use local|remote|merge or --continue');
   return locked(root, async () => {
     const state = await load(root); await identity(client, state);
-    await requireV3(root, state);
+    await requireCurrent(root, state);
     const entry = state.entries[id]; if (!entry) throw Error('Memo is not tracked');
     const scan = await scanNotes(root, state);
     if (scan.blocked.has(id) && scan.blocked.get(id).status !== 'missing-local') throw Error(`Cannot resolve: ${scan.blocked.get(id).status}`);
@@ -380,9 +402,9 @@ export async function retryUpload(root,client,key) {
 
 // Explicit create/bind. Persist the intent before POST so a lost response never
 // causes an automatic second create. --memo reconciles a user-confirmed receipt.
-export async function importFile(root, client, { file, notebookId, title, memoId } = {}) {
+export async function importFile(root, client, { file, notebookId, title, memoId, bindDirectory: bindImportedDirectory = false } = {}) {
   return locked(root, async () => {
-    const state = await load(root); await identity(client, state); await requireV3(root, state);
+    const state = await load(root); await identity(client, state); await requireCurrent(root, state);
     if (!file || !notebookId) throw Error('Import requires --file and --notebook');
     const { relative } = await import('node:path');
     const path = relative(resolve(root), resolve(root, file)).split('\\').join('/');
@@ -397,6 +419,11 @@ export async function importFile(root, client, { file, notebookId, title, memoId
     const raw = decoded.id ? decoded.body : diskRaw;
     const { notebooks } = await client.request('/api/v1/notebooks');
     if (!selectNotebooks(notebooks, state.scope).has(notebookId)) throw Error('Notebook is outside the linked scope');
+    if(bindImportedDirectory) {
+      const directory=posix.dirname(path);
+      if(state.directoryBindings?.[notebookId]!==undefined&&state.directoryBindings[notebookId]!==directory) throw Error('Notebook bound elsewhere; use workspace bind explicitly');
+      if(Object.entries(state.directoryBindings||{}).some(([id,p])=>id!==notebookId&&p.toLowerCase()===directory.toLowerCase())) throw Error('Import directory bound to another notebook');
+    }
     const plan = await attachmentContext(root, client, state, async () => {}, true).prepare(raw, path, 'import');
     if (plan.pending) throw Error('Import does not upload new local attachments. Import the text first, then add attachments and sync.');
     if (receipt && receipt.hash !== hash(raw)) throw Error('Import source changed after a create attempt; restore the original file before reconciling');
@@ -421,6 +448,11 @@ export async function importFile(root, client, { file, notebookId, title, memoId
     }
     if (memo.notebookId !== notebookId || memo.isDeleted || typeof memo.contentMarkdown !== 'string' || !Number.isInteger(memo.revision)) throw Error('Invalid memo receipt or notebook mismatch');
     if (state.entries[memo.id]) throw Error('Memo is already bound to another local file');
+    if(bindImportedDirectory) {
+      state.directoryBindings={...(state.directoryBindings||{}),[notebookId]:posix.dirname(path)};
+      state.layoutInvalidated=[...(state.layoutInvalidated||[]),notebookId];
+    }
+
     if (await normalizeRemote(memo.contentMarkdown, client.baseUrl) !== plan.content) throw Error(`Memo ${memo.id} content differs from the import source; preserved both copies`);
     const scan = await scanNotes(root, state);
     if (scan.ids.get(memo.id)?.some(note => note.path !== path)) throw Error('Memo ID already appears in a local file');
@@ -432,4 +464,37 @@ export async function importFile(root, client, { file, notebookId, title, memoId
     state.imports[key].status = 'bound'; await save(root, state);
     return { id: memo.id, path, status: 'imported' };
   });
+}
+
+export async function bindDirectory(root, client, notebookId, path, {dryRun=false}={}) {
+  let previewState, backup;
+  await locked(root, async()=>{
+    const state=await load(root);await identity(client,state);await requireCurrent(root,state);
+    const {notebooks}=await client.request('/api/v1/notebooks');
+    if(!selectNotebooks(notebooks,state.scope).has(notebookId)) throw Error('Binding notebook must be in linked scope');
+    if(typeof path!=='string'||!path||posix.isAbsolute(path)||path.split('/').some(p=>p==='..'||p.toLowerCase()==='.edgeever')||posix.normalize(path)!==path) throw Error('Use a relative workspace directory, or .');
+    await safePath(root,path);
+    try { if(!(await lstat(await safePath(root,path))).isDirectory()) throw Error('Binding path is not a directory'); } catch(e) {if(e.code!=='ENOENT')throw e;}
+    if(Object.entries(state.directoryBindings||{}).some(([id,p])=>id!==notebookId&&p.toLowerCase()===path.toLowerCase())) throw Error('Directory already bound to another notebook');
+    if(!dryRun) {backup=`.edgeever/migrations/layout-${randomUUID()}/state.json`;await atomic(root,backup,await read(root,'.edgeever/state.json'));}
+    state.directoryBindings={...(state.directoryBindings||{}),[notebookId]:path};
+    const selected=selectNotebooks(notebooks,state.scope), map=new Map(notebooks.map(n=>[n.id,n]));
+    let ancestor=map.get(notebookId)?.parentId;
+    state.retiredNotebookPaths??=[];
+    while(ancestor&&!selected.has(ancestor)) {const old=state.notebookPaths?.[ancestor];if(old&&old!=='.')state.retiredNotebookPaths.push(old);if(state.notebookPaths)delete state.notebookPaths[ancestor];ancestor=map.get(ancestor)?.parentId;}
+    state.layoutInvalidated=[notebookId];
+    if(dryRun) previewState=state;else await save(root,state);
+  });
+  return {...await sync(root,client,{dryRun,pullOnly:true,layoutOnly:true,previewState}),backup,binding:{notebookId,path}};
+}
+
+export async function gcWorkspace(root, options={}) {
+  return locked(root,async()=>{
+    const state=await load(root);
+    if(state.version!==4) throw Error('Run workspace migrate before GC');
+    const result=await collectGarbage(root,state,{...(state.gcPolicy||{}),...options});
+    if(!options.dryRun&&result.status==='gc-complete'){state.gcPolicy=result.policy;state.lastGcAt=Date.now();await save(root,state);}
+    return result;
+  });
+
 }

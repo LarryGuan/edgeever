@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, rename, link, unlink } from 'node:fs/promises';
 import { posix } from 'node:path';
-import { read, safePath, atomic, installFile } from './files.mjs';
+import { read, safePath, atomic, installFile, hash } from './files.mjs';
 
 export const moveJournal = '.edgeever/pending-move.json';
 // Resume before scanning IDs: an interrupted move can temporarily have no visible
@@ -35,7 +35,7 @@ export async function resumeMove(root, state, save) {
 export async function moveNote(root, state, plan, save) {
   if (await read(root, plan.to) !== null) throw Error(`Move destination occupied: ${plan.to}`);
   plan.notebookPaths = state.notebookPaths;
-  plan.backup = `.edgeever/history/moves/${randomUUID()}.md`;
+  plan.backup = `.edgeever/history/moves/${hash(plan.id)}/${randomUUID()}.md`;
   await atomic(root, moveJournal, JSON.stringify(plan, null, 2));
   await resumeMove(root, state, save);
 }
