@@ -31,10 +31,15 @@ export function decodeNote(text) {
   return { id, body: preserve || remaining.trim() ? fm.opening + remaining + fm.closing + fm.tail : fm.tail };
 }
 
+export function validateRemoteBody(body) {
+  const fm = frontMatter(body);
+  if (fm?.doc.contents?.items.some(item => item.key?.value === 'edgeever')) throw Error('The edgeever front-matter key is reserved for CLI workspace metadata (including memo_id: PENDING). For a new document, omit this key and use workspace import; the CLI assigns the real ID. For a tracked file, keep its metadata and use workspace sync instead of create/update. No content was submitted or stripped.');
+  return fm;
+}
+
 export function encodeNote(body, id) {
   if (!/^[\w-]+$/.test(id)) throw Error('Invalid memo ID');
-  const fm = frontMatter(body);
-  if (fm?.doc.contents?.items.some(item => item.key?.value === 'edgeever')) throw Error('The edgeever front-matter key is reserved; rename the remote/user key before syncing');
+  const fm = validateRemoteBody(body);
   const newline = fm?.opening.endsWith('\r\n') ? '\r\n' : '\n';
   const metadata = `edgeever:${newline}  memo_id: ${id}${newline}${fm ? `  preserve_front_matter: true${newline}` : ''}`;
   return fm ? fm.opening + metadata + fm.yaml + fm.closing + fm.tail : `---\n${metadata}---\n${body}`;

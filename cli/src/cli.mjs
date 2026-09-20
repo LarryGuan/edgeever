@@ -1,3 +1,5 @@
+import { validateRemoteBody } from "./file-workspace/metadata.mjs";
+import { updateMemo } from "./publish.mjs";
 import { createNotebook } from "./notebooks.mjs";
 import { manageSkills, packageVersion } from "./skills.mjs";
 import { interactiveResolve, editDraft } from "./file-workspace/interactive.mjs";
@@ -163,7 +165,7 @@ const main = async () => {
     case "update": {
       const memoId = requireValue(argv[0], "memoId");
       const options = parseOptions(argv.slice(1));
-      const body = options.body || options["body-file"] ? await readBodyOption(options) : undefined;
+      const body = options.body !== undefined || options["body-file"] !== undefined ? await readBodyOption(options) : undefined;
       const payload = removeUndefined({
         title: options.title,
         notebookId: options.notebook,
@@ -171,12 +173,7 @@ const main = async () => {
         tags: options.tags === undefined ? undefined : parseTags(options.tags),
       });
 
-      return printJson(
-        await client.request(`/api/v1/memos/${encodeURIComponent(memoId)}`, {
-          method: "PATCH",
-          body: payload,
-        })
-      );
+      return printJson(await updateMemo(client, memoId, payload));
     }
     case "move": {
       const options = parseOptions(argv);
@@ -351,7 +348,7 @@ function parseOptions(args) {
     const key = arg.slice(2);
     const next = args[index + 1];
 
-    if (!next || next.startsWith("--")) {
+    if (next === undefined || /^--[a-zA-Z][\w-]*$/.test(next)) {
       options[key] = "true";
       continue;
     }
@@ -404,11 +401,9 @@ function stripGlobalOptions(args, globalKeys) {
 }
 
 const readBodyOption = async (options) => {
-  if (options["body-file"]) {
-    return readFile(options["body-file"], "utf8");
-  }
-
-  return options.body || "";
+  const body = options["body-file"] ? await readFile(options["body-file"], "utf8") : options.body || "";
+  validateRemoteBody(body);
+  return body;
 };
 
 const parseTags = (value) =>

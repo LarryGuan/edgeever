@@ -661,3 +661,12 @@ test('deleted directly linked notebook no longer aborts sync and nonempty local 
  expect(result.results.some(r=>r.status==='directory-retained-not-empty')).toBe(true);
  expect(await readFile(join(root,entry.path),'utf8')).toBe('原文\n');
 });
+
+test('direct CLI body update uses the real required edit-session and preserves user front matter',async()=>{
+ const {updateMemo}=await import('../../cli/src/publish.mjs');const memo=await create();
+ const body='---\ntitle: User metadata\n---\nnew body';
+ await updateMemo(client,memo.id,{contentMarkdown:body});
+ expect((await getMemoDetail(storage.db,'ws_default',memo.id)).contentMarkdown).toBe(body);
+ await expect(updateMemo(client,memo.id,{contentMarkdown:'---\nedgeever:\n  memo_id: PENDING\n---\nwrong'})).rejects.toThrow('reserved');
+ expect((await getMemoDetail(storage.db,'ws_default',memo.id)).contentMarkdown).toBe(body);
+});

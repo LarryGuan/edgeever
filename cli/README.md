@@ -10,7 +10,7 @@ From this directory:
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.6.0.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.6.1.tgz
 edgeever --help
 ```
 
@@ -154,3 +154,9 @@ Creation is sequential, not a server transaction. Failures report completed step
 ## Deleted notebook directories (0.6.0)
 
 After sync, the CLI checks managed directory IDs against the full workspace notebook list, rechecking before cleanup. A deleted notebook's empty local directory is removed with an empty-directory-only operation, deepest first. Live notebooks, excluded/out-of-scope notebooks and unmanaged directories are retained. Files (including hidden files) prevent removal and produce `directory-retained-not-empty`; no recursive deletion occurs. Local Markdown and note baselines remain protected by the existing retention rules. A directly linked notebook that disappeared produces `scope-notebook-missing` instead of aborting the whole sync. `--dry-run` reports `would-remove-directory` and accounts for planned note moves; it writes no files or mappings. `--pull-only` also performs empty-directory cleanup. This does not implement notebook rename/reparent mirroring or deleting nonempty local folders.
+
+## Body submission checks (0.6.1)
+
+`create` and `update` validate `--body` and `--body-file` before any request. Top-level YAML `edgeever:` (including `memo_id: PENDING`) is reserved for CLI workspace identity and is rejected, never silently stripped. New documents should omit it and use `workspace import`; tracked documents should keep it and use `workspace sync`. Ordinary user front matter and fenced examples remain unchanged. This is a CLI format restriction, not a server-wide API rule. Inline bodies beginning with `---` are now parsed correctly as argument values.
+
+Body `update` now reads the memo and obtains a bound edit-session, then submits revision/hash/session guards. Conflicts and missing session support stop without retry or unguarded fallback. This protects races during the command, not stale text prepared before its initial read; full-body replacement still requires review. Metadata-only updates retain their previous behavior. No server upgrade is needed on the current customized deployment.

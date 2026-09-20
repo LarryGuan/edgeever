@@ -10,7 +10,7 @@
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.6.0.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.6.1.tgz
 edgeever --help
 ```
 
@@ -154,3 +154,9 @@ edgeever --profile cloud create-notebook --path "开发迭代/260924" --parent �
 ## 已删除笔记本的空目录清理（0.6.0）
 
 sync 后将受管目录 ID 与整个工作区的笔记本列表比较，清理前再次检查。云端已删除笔记本对应的本地空目录会按由深到浅的顺序移除，仅使用空目录删除操作。仍存在、仅被排除/移出同步范围的笔记本目录，以及非受管目录都会保留。有任何文件（包括隐藏文件）时保留并报告 `directory-retained-not-empty`，绝不递归删除。本地 Markdown 与笔记基线继续按原有规则保留。直接链接的笔记本消失时报告 `scope-notebook-missing`，不再中止整个同步。`--dry-run` 报告 `would-remove-directory`，并考虑本次计划搬走的笔记，不改文件和映射；`--pull-only` 也会清理空目录。本版不包含笔记本自身改名/换父级映射，也不删除非空本地文件夹。
+
+## 正文提交前检查（0.6.1）
+
+`create` 和 `update` 在任何请求前校验 `--body` 与 `--body-file`。顶层 YAML `edgeever:`（包括 `memo_id: PENDING`）是 CLI 工作目录身份保留字段，发现后直接拒绝，不静默剥离。新文档不应手写该字段，通过 `workspace import` 获取真实 ID；已跟踪文档保留字段，使用 `workspace sync`。普通用户 front matter 和代码块示例保持不变。这是 CLI 格式限制，并非服务端统一 API 规则。以 `---` 开头的内联正文也已修复为按参数值正确解析。
+
+带正文的 `update` 会先读取笔记并获取绑定 edit-session，再携带版本、内容哈希及会话提交。发生冲突或缺少会话支持就停止，不自动重试或退回无保护写入。保护范围是命令运行期间的竞争，不代表能识别首次读取前已过时的本地正文，整文替换仍需审阅。仅修改标题等非正文操作保持原行为。当前定制服务端无需升级。
