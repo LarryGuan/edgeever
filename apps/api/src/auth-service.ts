@@ -10,13 +10,14 @@ import {
   resolveInstanceAuthMode,
   type InstanceAuthMode,
 } from "./auth-state";
-import type { ApiTokenRow } from "./api-token-routes";
+import { MULTI_NOTEBOOK_SCOPE_SENTINEL, type ApiTokenRow } from "./api-token-routes";
 import type { AppContext, AuthContext, Bindings } from "./api-context";
 import { AppError } from "./app-error";
 import type { UserRow } from "./auth-routes";
 import { createId, isoNow, parseJsonArray } from "./entity-utils";
 import { sha256 } from "./hash-utils";
 import { apiError } from "./http-errors";
+import { resolveMcpAllowedNotebookIds } from "./mcp-notebook-scope";
 import type { DatabaseAdapter } from "./storage-contract";
 import type { InstanceUserRow } from "./user-routes";
 import { ensureUserWorkspace } from "./workspace-provisioning";
@@ -295,11 +296,17 @@ const authenticateBearerToken = async (c: AppContext, touch: boolean): Promise<A
   }
 
   const row = await c.env.storage.db.prepare(
-    `SELECT id, name, token_value, scopes_json, last_used_at, expires_at, is_revoked, created_at, workspace_id, mcp_notebook_id
-     FROM api_tokens
-     WHERE token_hash = ?
-       AND is_revoked = 0
-       AND (expires_at IS NULL OR expires_at > ?)`
+    `SELECT t.id, t.name, t.token_value, t.scopes_json, t.last_used_at, t.expires_at,
+            t.is_revoked, t.created_at, t.workspace_id, t.mcp_notebook_id, t.mcp_scope_mode,
+            COALESCE((
+              SELECT json_group_array(scope.notebook_id)
+              FROM api_token_notebook_scopes scope
+              WHERE scope.token_id = t.id
+            ), '[]') AS mcp_notebook_ids_json
+     FROM api_tokens t
+     WHERE t.token_hash = ?
+       AND t.is_revoked = 0
+       AND (t.expires_at IS NULL OR t.expires_at > ?)`
   )
     .bind(await sha256(token), isoNow())
     .first<ApiTokenRow>();
@@ -326,6 +333,16 @@ const authenticateBearerToken = async (c: AppContext, touch: boolean): Promise<A
     console.error("EdgeEver example seed failed", error);
   });
 
+  const storedRootIds = parseJsonArray(row.mcp_notebook_ids_json ?? "[]");
+  const legacyRootId = row.mcp_notebook_id && row.mcp_notebook_id !== MULTI_NOTEBOOK_SCOPE_SENTINEL
+    ? row.mcp_notebook_id
+    : null;
+  const rootIds = storedRootIds.length > 0 ? storedRootIds : legacyRootId ? [legacyRootId] : [];
+  const scopeMode = row.mcp_scope_mode ?? (row.mcp_notebook_id ? "notebooks" : "all");
+  const allowedIds = scopeMode === "notebooks"
+    ? await resolveMcpAllowedNotebookIds(c.env.storage.db, row.workspace_id, rootIds)
+    : [];
+
   return {
     kind: "agent",
     actorType: "agent",
@@ -336,7 +353,10 @@ const authenticateBearerToken = async (c: AppContext, touch: boolean): Promise<A
     workspaceId: row.workspace_id,
     role: "member",
     tokenId: row.id,
-    mcpNotebookId: row.mcp_notebook_id,
+    mcpNotebookId: rootIds.length === 1 ? rootIds[0] : null,
+    mcpNotebookScopeMode: scopeMode,
+    mcpNotebookRootIds: rootIds,
+    mcpAllowedNotebookIds: allowedIds,
   };
 };
 

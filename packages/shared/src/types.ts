@@ -299,6 +299,9 @@ export type ApiToken = {
   name: string;
   token: string | null;
   scopes: string[];
+  mcpScopeMode: "all" | "notebooks";
+  mcpNotebookIds: string[];
+  /** @deprecated Use mcpNotebookIds. Kept for older clients during the transition. */
   mcpNotebookId: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;

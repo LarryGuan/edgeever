@@ -83,9 +83,12 @@ describe("API request errors", () => {
     const environment = await createEnvironment({ requireAuth: true });
     const token = "notebook-scoped-rest-block-test";
     await environment.storage.db.prepare(
-      `INSERT INTO api_tokens (id, workspace_id, name, token_hash, scopes_json, mcp_notebook_id)
-       VALUES ('tok_scoped', 'ws_default', 'Scoped', ?, '["read:memos"]', 'nb_inbox')`,
+      `INSERT INTO api_tokens (id, workspace_id, name, token_hash, scopes_json, mcp_notebook_id, mcp_scope_mode)
+       VALUES ('tok_scoped', 'ws_default', 'Scoped', ?, '["read:memos"]', 'nb_inbox', 'notebooks')`,
     ).bind(await sha256(token)).run();
+    await environment.storage.db.prepare(
+      `INSERT INTO api_token_notebook_scopes (token_id, notebook_id) VALUES ('tok_scoped', 'nb_inbox')`,
+    ).run();
 
     const response = await request(environment, "/api/v1/memos", {
       headers: { Authorization: `Bearer ${token}` },

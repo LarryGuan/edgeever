@@ -79,6 +79,7 @@ import { registerTagRoutes } from "./tag-routes";
 import { registerTemplateRoutes } from "./template-routes";
 import { registerAuthRoutes } from "./auth-routes";
 import { registerApiTokenRoutes } from "./api-token-routes";
+import { hasMcpNotebookScope } from "./mcp-notebook-scope";
 import { registerObjectStorageRoutes } from "./object-storage-routes";
 import { registerAiRoutes } from "./ai-routes";
 import { registerPluginCapabilityRoutes } from "./plugin-capability-routes";
@@ -337,7 +338,7 @@ app.use("/api/v1/*", async (c, next) => {
     );
   }
 
-  if (auth.kind === "agent" && auth.mcpNotebookId) {
+  if (auth.kind === "agent" && hasMcpNotebookScope(auth)) {
     return apiError(c, "mcp_only_token", "This notebook-scoped token can only be used with the MCP endpoint.", 403);
   }
 

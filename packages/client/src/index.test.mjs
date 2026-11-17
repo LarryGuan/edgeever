@@ -658,6 +658,7 @@ const jsonEndpointCases = [
   ["deleteTag", ["a b"], "DELETE", "/api/v1/tags/a%20b", undefined],
   ["listApiTokens", [], "GET", "/api/v1/api-tokens", undefined],
   ["createApiToken", [{ name: "CI", scopes: ["read:memos"], expiresAt: null }], "POST", "/api/v1/api-tokens", { name: "CI", scopes: ["read:memos"], expiresAt: null }],
+  ["updateApiToken", ["tok_1", { mcpScopeMode: "notebooks", mcpNotebookIds: ["nb_1"] }], "PATCH", "/api/v1/api-tokens/tok_1", { mcpScopeMode: "notebooks", mcpNotebookIds: ["nb_1"] }],
   ["revokeApiToken", ["tok_1"], "DELETE", "/api/v1/api-tokens/tok_1", undefined],
   ["getImportCapabilities", [], "GET", "/api/v1/imports/capabilities", undefined],
   ["importMemos", [{ memos: [] }], "POST", "/api/v1/imports/memos", { memos: [] }],

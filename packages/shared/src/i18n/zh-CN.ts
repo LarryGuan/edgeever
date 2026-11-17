@@ -3715,6 +3715,13 @@ export const zhCN = {
     notebookScopeTitle: "MCP 笔记范围",
     allNotebooks: "全部笔记",
     notebookScopeBadge: "MCP：{{name}}",
+    selectedNotebookScopes: "已选 {{count}} 个授权范围",
+    selectNotebooks: "选择笔记本",
+    inheritedScope: "继承授权",
+    noAvailableNotebookScope: "无可用笔记本",
+    editNotebookScope: "修改授权笔记",
+    editNotebookScopeTitle: "修改「{{name}}」的笔记授权",
+    editNotebookScopeDescription: "Token 本身不会改变。选择父笔记本会同时授权其当前及以后新增的子孙笔记本。",
     accessLevels: {
       full: {
         label: "完全访问",
@@ -3737,7 +3744,7 @@ export const zhCN = {
     legacyTokenCannotCopy: "旧 Token 无法复制",
     legacyConfigCannotCopy: "旧 Token 无法复制 MCP 配置",
     deleteToken: "删除 Token",
-    description: "授权网页剪藏插件、MCP 服务及 AI Agent 访问你的笔记。选择单个笔记本时，Token 仅可用于 MCP，且只能访问该笔记本。",
+    description: "授权网页剪藏插件、MCP 服务及 AI Agent 访问你的笔记。选择笔记本后，Token 仅可用于 MCP；选择父级会同时授权其子孙笔记本。",
     namePlaceholder: "Token 名称（如 Chrome 剪藏或 Claude Desktop）",
     createToken: "创建 Token",
     activeTokens: "Token 列表",

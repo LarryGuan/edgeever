@@ -52,8 +52,13 @@ export type AuthContext = {
   scopes: string[];
   workspaceId: string;
   role: "owner" | "member";
-  /** When set, this API token is MCP-only and may access notes in exactly this notebook. */
+  /** Compatibility field for the earlier exact-one-notebook scope. */
   mcpNotebookId?: string | null;
+  mcpNotebookScopeMode?: "all" | "notebooks";
+  /** Explicit roots selected by the user. */
+  mcpNotebookRootIds?: string[];
+  /** Active roots and descendants resolved for this request. */
+  mcpAllowedNotebookIds?: string[];
   sessionId?: string;
   tokenId?: string;
   /** Recovery-code session that must rebind TOTP before any other access. */

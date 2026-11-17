@@ -3716,6 +3716,13 @@ export const ru = {
     notebookScopeTitle: "Область заметок MCP",
     allNotebooks: "Все заметки",
     notebookScopeBadge: "MCP: {{name}}",
+    selectedNotebookScopes: "{{count}} notebook scopes",
+    selectNotebooks: "Select notebooks",
+    inheritedScope: "Inherited",
+    noAvailableNotebookScope: "No available notebook",
+    editNotebookScope: "Edit notebook access",
+    editNotebookScopeTitle: "Edit access for {{name}}",
+    editNotebookScopeDescription: "The existing token stays unchanged. Selecting a parent includes its current and future descendants.",
     accessLevels: {
       full: {
         label: "Полный доступ",

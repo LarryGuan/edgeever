@@ -3715,6 +3715,13 @@ export const zhTW = {
     notebookScopeTitle: "MCP 筆記範圍",
     allNotebooks: "全部筆記",
     notebookScopeBadge: "MCP：{{name}}",
+    selectedNotebookScopes: "已選 {{count}} 個授權範圍",
+    selectNotebooks: "選擇筆記本",
+    inheritedScope: "繼承授權",
+    noAvailableNotebookScope: "無可用筆記本",
+    editNotebookScope: "修改授權筆記",
+    editNotebookScopeTitle: "修改「{{name}}」的筆記授權",
+    editNotebookScopeDescription: "Token 本身不會改變。選擇父筆記本會同時授權其目前及以後新增的子孫筆記本。",
     accessLevels: {
       full: {
         label: "完全訪問",

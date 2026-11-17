@@ -82,8 +82,44 @@ const MEMO_BATCH_TOOLS = new Set([
 
 const optionalString = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
 
-const requireNotebookTarget = (args: Record<string, unknown>, notebookId: string) => {
-  if (optionalString(args.notebookId) !== notebookId) {
+export const getMcpNotebookScope = (auth: AuthContext) => {
+  const rootIds = auth.mcpNotebookRootIds
+    ?? (auth.mcpNotebookId ? [auth.mcpNotebookId] : []);
+  const restricted = auth.mcpNotebookScopeMode === "notebooks" || rootIds.length > 0;
+  const allowedIds = auth.mcpAllowedNotebookIds ?? rootIds;
+  return { restricted, rootIds, allowedIds };
+};
+
+export const hasMcpNotebookScope = (auth: AuthContext) => getMcpNotebookScope(auth).restricted;
+
+export const resolveMcpAllowedNotebookIds = async (
+  database: DatabaseAdapter,
+  workspaceId: string,
+  rootIds: string[],
+) => {
+  if (rootIds.length === 0) return [];
+  const rows = await database.prepare(
+    `WITH RECURSIVE allowed(id) AS (
+       SELECT n.id
+       FROM notebooks n
+       INNER JOIN json_each(?) roots ON roots.value = n.id
+       WHERE n.workspace_id = ? AND n.is_deleted = 0
+
+       UNION
+
+       SELECT n.id
+       FROM notebooks n
+       INNER JOIN allowed parent ON n.parent_id = parent.id
+       WHERE n.workspace_id = ? AND n.is_deleted = 0
+     )
+     SELECT id FROM allowed`,
+  ).bind(JSON.stringify(rootIds), workspaceId, workspaceId).all<{ id: string }>();
+  return rows.results.map((row) => row.id);
+};
+
+const requireNotebookTarget = (args: Record<string, unknown>, allowedIds: Set<string>) => {
+  const notebookId = optionalString(args.notebookId);
+  if (!notebookId || !allowedIds.has(notebookId)) {
     throw new AppError("not_found", "Notebook not found", 404);
   }
 };
@@ -93,8 +129,8 @@ const requireMemoTargets = async (
   auth: AuthContext,
   memoIds: string[],
 ) => {
-  const notebookId = auth.mcpNotebookId;
-  if (!notebookId || memoIds.length === 0) {
+  const { allowedIds } = getMcpNotebookScope(auth);
+  if (allowedIds.length === 0 || memoIds.length === 0) {
     throw new AppError("not_found", "Memo not found", 404);
   }
   const uniqueIds = [...new Set(memoIds.map((id) => id.trim()).filter(Boolean))];
@@ -105,15 +141,17 @@ const requireMemoTargets = async (
   const row = await database.prepare(
     `SELECT COUNT(*) AS count
      FROM memos
-     WHERE workspace_id = ? AND notebook_id = ? AND id IN (${placeholders})`,
-  ).bind(auth.workspaceId, notebookId, ...uniqueIds).first<{ count: number }>();
+     WHERE workspace_id = ?
+       AND notebook_id IN (SELECT value FROM json_each(?))
+       AND id IN (${placeholders})`,
+  ).bind(auth.workspaceId, JSON.stringify(allowedIds), ...uniqueIds).first<{ count: number }>();
   if (Number(row?.count ?? 0) !== uniqueIds.length) {
     throw new AppError("not_found", "Memo not found", 404);
   }
 };
 
 export const isMcpToolAvailableForAuth = (auth: AuthContext, name: string) =>
-  !auth.mcpNotebookId || SAFE_SCOPED_TOOLS.has(name);
+  !hasMcpNotebookScope(auth) || SAFE_SCOPED_TOOLS.has(name);
 
 export const prepareMcpNotebookScopedCall = async (
   database: DatabaseAdapter,
@@ -121,31 +159,31 @@ export const prepareMcpNotebookScopedCall = async (
   name: string,
   input: Record<string, unknown>,
 ) => {
-  const notebookId = auth.mcpNotebookId;
-  if (!notebookId) return input;
+  const scope = getMcpNotebookScope(auth);
+  if (!scope.restricted) return input;
   if (!SAFE_SCOPED_TOOLS.has(name)) {
     throw new AppError("forbidden", "This tool is unavailable to a notebook-scoped MCP token.", 403);
   }
 
   const args = { ...input };
+  const allowedIds = new Set(scope.allowedIds);
   if (FORCE_NOTEBOOK_TOOLS.has(name)) {
     const requested = optionalString(args.notebookId);
-    if (requested && requested !== notebookId) {
+    if (requested && !allowedIds.has(requested)) {
       throw new AppError("not_found", "Notebook not found", 404);
     }
-    args.notebookId = notebookId;
   }
 
-  if (NOTEBOOK_TARGET_TOOLS.has(name)) requireNotebookTarget(args, notebookId);
+  if (NOTEBOOK_TARGET_TOOLS.has(name)) requireNotebookTarget(args, allowedIds);
 
-  if (name === "get_notebook") requireNotebookTarget(args, notebookId);
+  if (name === "get_notebook") requireNotebookTarget(args, allowedIds);
 
   if (MEMO_TARGET_TOOLS.has(name)) {
     const memoId = optionalString(args.memoId);
     if (!memoId) throw new AppError("not_found", "Memo not found", 404);
     await requireMemoTargets(database, auth, [memoId]);
     if (name === "update_memo" && args.notebookId !== undefined) {
-      requireNotebookTarget(args, notebookId);
+      requireNotebookTarget(args, allowedIds);
     }
   }
 
@@ -155,7 +193,7 @@ export const prepareMcpNotebookScopedCall = async (
     }
     await requireMemoTargets(database, auth, args.memoIds as string[]);
     if ((name === "move_memos" || name === "merge_memos") && args.notebookId !== undefined) {
-      requireNotebookTarget(args, notebookId);
+      requireNotebookTarget(args, allowedIds);
     }
   }
 

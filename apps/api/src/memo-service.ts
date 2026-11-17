@@ -29,6 +29,7 @@ import { clampNumber, createId, isoNow, parseJsonArray } from "./entity-utils";
 import { notebookExists, workspaceInboxId } from "./notebook-service";
 import { sha256 } from "./hash-utils";
 import { getRequiredString } from "./mcp-json-rpc";
+import { getMcpNotebookScope } from "./mcp-notebook-scope";
 import {
   escapeLike,
   mapMemoSummary,
@@ -103,6 +104,7 @@ export const mapMemoDetail = (row: MemoDetailRow): MemoDetail => ({
 });
 
 export const getCurrentWorkspaceIdentity = async (db: DatabaseAdapter, auth: AuthContext) => {
+  const notebookScope = getMcpNotebookScope(auth);
   const row = await db.prepare(
     `SELECT w.id AS workspace_id, w.name AS workspace_name, w.is_personal,
             u.id AS user_id, u.username, u.display_name, wm.role
@@ -132,14 +134,19 @@ export const getCurrentWorkspaceIdentity = async (db: DatabaseAdapter, auth: Aut
     },
     authorization: {
       kind: auth.kind === "agent" ? "api_token" : "user_session",
-      ...(auth.kind === "agent" ? { tokenName: auth.username, scopes: auth.scopes, mcpNotebookId: auth.mcpNotebookId ?? null } : {}),
+      ...(auth.kind === "agent" ? {
+        tokenName: auth.username,
+        scopes: auth.scopes,
+        mcpNotebookScopeMode: auth.mcpNotebookScopeMode ?? "all",
+        mcpNotebookIds: notebookScope.rootIds,
+      } : {}),
     },
     dataIsolation: {
       workspaceScoped: true,
-      notebookScoped: Boolean(auth.mcpNotebookId),
+      notebookScoped: notebookScope.restricted,
       statement:
-        auth.mcpNotebookId
-          ? "This MCP token can access notes in exactly one notebook; other notebooks are excluded."
+        notebookScope.restricted
+          ? "This MCP token can access only its selected notebook subtrees; other notebooks are excluded."
           : "Every notebook and memo returned by this MCP server belongs to this workspace; data from other users is excluded.",
     },
   };
@@ -193,6 +200,7 @@ export const searchMemoSummaries = async (
     isPinned?: boolean | null;
     hasResources?: boolean | null;
     poster?: boolean | null;
+    authorizedNotebookIds?: string[] | null;
     limit: number;
   }
 ): Promise<MemoSearchSummary[]> => {
@@ -210,6 +218,11 @@ export const searchMemoSummaries = async (
   if (notebookId) {
     filters.push("m.notebook_id = ?");
     binds.push(notebookId);
+  }
+
+  if (options.authorizedNotebookIds) {
+    filters.push("m.notebook_id IN (SELECT value FROM json_each(?))");
+    binds.push(JSON.stringify(options.authorizedNotebookIds));
   }
 
   for (const tag of tags) {
@@ -321,7 +334,7 @@ export const searchMemoSummaries = async (
 
 export const listMemosForMcp = async (
   db: DatabaseAdapter,
-  options: { workspaceId: string; notebookId?: string | null; limit: number; offset: number; includeContent: boolean; includeDeleted: boolean; poster?: boolean | null }
+  options: { workspaceId: string; notebookId?: string | null; authorizedNotebookIds?: string[] | null; limit: number; offset: number; includeContent: boolean; includeDeleted: boolean; poster?: boolean | null }
 ) => {
   const notebookId = options.notebookId?.trim() || null;
   const limit = clampNumber(options.limit, 1, 100);
@@ -331,6 +344,12 @@ export const listMemosForMcp = async (
     ? `(instr(c.content_markdown, '<!-- edgeever-poster-v1:') > 0) = ${options.poster ? 1 : 0}`
     : "1 = 1";
   const deletedFilter = options.includeDeleted ? "1 = 1" : "m.is_deleted = 0";
+  const authorizationFilter = options.authorizedNotebookIds
+    ? "m.notebook_id IN (SELECT value FROM json_each(?))"
+    : "1 = 1";
+  const authorizationBinds = options.authorizedNotebookIds
+    ? [JSON.stringify(options.authorizedNotebookIds)]
+    : [];
 
   if (options.includeContent) {
     const rows = await db
@@ -341,12 +360,12 @@ export const listMemosForMcp = async (
                 m.source_memo_ids, m.merge_source_count, m.merged_into_memo_id
          FROM memos m
          INNER JOIN memo_contents c ON c.memo_id = m.id
-         WHERE m.workspace_id = ? AND ${deletedFilter} AND ${posterFilter}
+         WHERE m.workspace_id = ? AND ${deletedFilter} AND ${posterFilter} AND ${authorizationFilter}
            AND (? IS NULL OR m.notebook_id = ?)
          ORDER BY m.updated_at DESC, m.id ASC
          LIMIT ? OFFSET ?`
       )
-      .bind(options.workspaceId, notebookId, notebookId, pageSize, offset)
+      .bind(options.workspaceId, ...authorizationBinds, notebookId, notebookId, pageSize, offset)
       .all<MemoDetailRow>();
     const page = rows.results.slice(0, limit).map(mapMemoDetail);
 
@@ -366,12 +385,12 @@ export const listMemosForMcp = async (
               c.content_text, (instr(c.content_markdown, '<!-- edgeever-poster-v1:') > 0) AS is_poster
        FROM memos m
        INNER JOIN memo_contents c ON c.memo_id = m.id
-       WHERE m.workspace_id = ? AND ${deletedFilter} AND ${posterFilter}
+       WHERE m.workspace_id = ? AND ${deletedFilter} AND ${posterFilter} AND ${authorizationFilter}
          AND (? IS NULL OR m.notebook_id = ?)
        ORDER BY m.updated_at DESC, m.id ASC
        LIMIT ? OFFSET ?`
     )
-    .bind(options.workspaceId, notebookId, notebookId, pageSize, offset)
+    .bind(options.workspaceId, ...authorizationBinds, notebookId, notebookId, pageSize, offset)
     .all<MemoSummaryRow>();
   const page = rows.results.slice(0, limit).map(mapMemoSummary);
 

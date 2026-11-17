@@ -42,6 +42,7 @@ import type { AppContext, AuditActor, AuthContext, Bindings } from "./api-contex
 import { AppError } from "./app-error";
 import { isDemoModeEnabled } from "./demo-mode";
 import { createId, isoNow } from "./entity-utils";
+import { getMcpNotebookScope } from "./mcp-notebook-scope";
 import {
   decodeBase64Data,
   encodeBase64Data,
@@ -274,6 +275,7 @@ export const callMcpTool = async (
     }
     case "search_memos": {
       assertScope(auth, "read:memos");
+      const notebookScope = getMcpNotebookScope(auth);
       return {
         memos: await searchMemoSummaries(c.env.storage.db, {
           workspaceId: auth.workspaceId,
@@ -287,17 +289,20 @@ export const callMcpTool = async (
           isPinned: typeof args.isPinned === "boolean" ? args.isPinned : null,
           poster: typeof args.poster === "boolean" ? args.poster : null,
           hasResources: typeof args.hasResources === "boolean" ? args.hasResources : null,
+          authorizedNotebookIds: notebookScope.restricted ? notebookScope.allowedIds : null,
           limit: clampNumber(Number(args.limit ?? 20), 1, 50),
         }),
       };
     }
     case "list_memos": {
       assertScope(auth, "read:memos");
+      const notebookScope = getMcpNotebookScope(auth);
       const includeAllFormats = includeAllMemoFormats(args.format);
       const includeContent = args.includeContent === true;
       const page = await listMemosForMcp(c.env.storage.db, {
         workspaceId: auth.workspaceId,
         notebookId: getOptionalString(args.notebookId),
+        authorizedNotebookIds: notebookScope.restricted ? notebookScope.allowedIds : null,
         limit: clampNumber(Number(args.limit ?? 50), 1, 100),
         offset: clampNumber(Number(args.offset ?? 0), 0, 100_000),
         includeContent,
@@ -1059,7 +1064,9 @@ export const callMcpTool = async (
     case "list_notebooks": {
       assertScope(auth, "read:notebooks");
       const notebooks = await listNotebooks(c.env.storage.db, auth.workspaceId);
-      return { notebooks: auth.mcpNotebookId ? notebooks.filter((item) => item.id === auth.mcpNotebookId) : notebooks };
+      const notebookScope = getMcpNotebookScope(auth);
+      const allowedIds = new Set(notebookScope.allowedIds);
+      return { notebooks: notebookScope.restricted ? notebooks.filter((item) => allowedIds.has(item.id)) : notebooks };
     }
     case "list_tags": {
       assertScope(auth, "read:tags");

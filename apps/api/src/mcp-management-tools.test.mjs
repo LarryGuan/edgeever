@@ -78,13 +78,20 @@ describe("MCP template and AI instruction management", () => {
   test("enforces a token notebook scope through the real MCP dispatcher", async () => {
     const { sqlite, auth, context } = createFixture();
     sqlite.query("INSERT INTO notebooks (id, workspace_id, name) VALUES ('nb_allowed', 'ws_mcp', 'Allowed')").run();
+    sqlite.query("INSERT INTO notebooks (id, workspace_id, parent_id, name) VALUES ('nb_child', 'ws_mcp', 'nb_allowed', 'Child')").run();
     sqlite.query("INSERT INTO notebooks (id, workspace_id, name) VALUES ('nb_other', 'ws_mcp', 'Other')").run();
     const allowed = await callMcpTool(context, auth, "create_memo", { notebookId: "nb_allowed", title: "Allowed" });
+    const child = await callMcpTool(context, auth, "create_memo", { notebookId: "nb_child", title: "Child" });
     const other = await callMcpTool(context, auth, "create_memo", { notebookId: "nb_other", title: "Other" });
-    const scoped = { ...auth, mcpNotebookId: "nb_allowed" };
+    const scoped = {
+      ...auth,
+      mcpNotebookScopeMode: "notebooks",
+      mcpNotebookRootIds: ["nb_allowed"],
+      mcpAllowedNotebookIds: ["nb_allowed", "nb_child"],
+    };
 
-    expect((await callMcpTool(context, scoped, "list_memos", {})).memos.map((memo) => memo.id))
-      .toEqual([allowed.memo.id]);
+    expect(new Set((await callMcpTool(context, scoped, "list_memos", {})).memos.map((memo) => memo.id)))
+      .toEqual(new Set([allowed.memo.id, child.memo.id]));
     await expect(callMcpTool(context, scoped, "get_memo", { memoId: other.memo.id }))
       .rejects.toMatchObject({ code: "not_found", status: 404 });
     await expect(callMcpTool(context, scoped, "create_memo", { notebookId: "nb_other", title: "Denied" }))

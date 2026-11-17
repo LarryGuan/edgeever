@@ -1371,9 +1371,15 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
 
     listApiTokens: () => request<ListApiTokensResponse>("/api/v1/api-tokens"),
 
-    createApiToken: (payload: { name: string; scopes: string[]; expiresAt?: string | null; mcpNotebookId?: string | null }) =>
+    createApiToken: (payload: { name: string; scopes: string[]; expiresAt?: string | null; mcpNotebookId?: string | null; mcpScopeMode?: "all" | "notebooks"; mcpNotebookIds?: string[] }) =>
       request<CreatedApiToken>("/api/v1/api-tokens", {
         method: "POST",
+        body: JSON.stringify(payload),
+      }),
+
+    updateApiToken: (tokenId: string, payload: { mcpScopeMode: "all" | "notebooks"; mcpNotebookIds: string[] }) =>
+      request<{ apiToken: ApiToken }>(`/api/v1/api-tokens/${encodeURIComponent(tokenId)}`, {
+        method: "PATCH",
         body: JSON.stringify(payload),
       }),
 

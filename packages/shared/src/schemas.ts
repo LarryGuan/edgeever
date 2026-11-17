@@ -261,11 +261,37 @@ export const UserUpdateSchema = z
   })
   .refine((input) => Object.keys(input).length > 0, "At least one field is required.");
 
+const ApiTokenNotebookIdsSchema = z.array(z.string().trim().min(1).max(160)).max(100);
+
 export const ApiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(80),
   scopes: z.array(z.string().trim().min(1).max(80)).min(1).max(32),
   expiresAt: z.string().datetime().nullable().optional(),
   mcpNotebookId: z.string().trim().min(1).max(160).nullable().optional(),
+  mcpScopeMode: z.enum(["all", "notebooks"]).optional(),
+  mcpNotebookIds: ApiTokenNotebookIdsSchema.optional(),
+}).superRefine((input, context) => {
+  if (input.mcpNotebookId !== undefined && (input.mcpScopeMode !== undefined || input.mcpNotebookIds !== undefined)) {
+    context.addIssue({ code: "custom", message: "Use either mcpNotebookId or the multi-notebook scope fields." });
+  }
+  if (input.mcpScopeMode === "notebooks" && (input.mcpNotebookIds?.length ?? 0) === 0) {
+    context.addIssue({ code: "custom", message: "Notebook-scoped tokens require at least one notebook." });
+  }
+  if (input.mcpScopeMode === "all" && (input.mcpNotebookIds?.length ?? 0) > 0) {
+    context.addIssue({ code: "custom", message: "All-notes tokens cannot include notebook IDs." });
+  }
+});
+
+export const ApiTokenUpdateSchema = z.object({
+  mcpScopeMode: z.enum(["all", "notebooks"]),
+  mcpNotebookIds: ApiTokenNotebookIdsSchema,
+}).superRefine((input, context) => {
+  if (input.mcpScopeMode === "notebooks" && input.mcpNotebookIds.length === 0) {
+    context.addIssue({ code: "custom", message: "Notebook-scoped tokens require at least one notebook." });
+  }
+  if (input.mcpScopeMode === "all" && input.mcpNotebookIds.length > 0) {
+    context.addIssue({ code: "custom", message: "All-notes tokens cannot include notebook IDs." });
+  }
 });
 
 export const TagRenameSchema = z.object({

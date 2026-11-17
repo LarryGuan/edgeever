@@ -3903,6 +3903,13 @@ export const es = {
     "notebookScopeTitle": "Ámbito de notas de MCP",
     "allNotebooks": "Todas las notas",
     "notebookScopeBadge": "MCP: {{name}}",
+    "selectedNotebookScopes": "{{count}} notebook scopes",
+    "selectNotebooks": "Select notebooks",
+    "inheritedScope": "Inherited",
+    "noAvailableNotebookScope": "No available notebook",
+    "editNotebookScope": "Edit notebook access",
+    "editNotebookScopeTitle": "Edit access for {{name}}",
+    "editNotebookScopeDescription": "The existing token stays unchanged. Selecting a parent includes its current and future descendants.",
     "accessLevels": {
       "full": {
         "label": "Acceso total",
