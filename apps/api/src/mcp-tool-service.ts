@@ -1058,7 +1058,8 @@ export const callMcpTool = async (
     }
     case "list_notebooks": {
       assertScope(auth, "read:notebooks");
-      return { notebooks: await listNotebooks(c.env.storage.db, auth.workspaceId) };
+      const notebooks = await listNotebooks(c.env.storage.db, auth.workspaceId);
+      return { notebooks: auth.mcpNotebookId ? notebooks.filter((item) => item.id === auth.mcpNotebookId) : notebooks };
     }
     case "list_tags": {
       assertScope(auth, "read:tags");

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Copy, KeyRound, Plus, ShieldCheck, Trash2 } from "lucide-react";
-import type { ApiToken } from "@edgeever/shared";
+import type { ApiToken, Notebook } from "@edgeever/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,6 +13,7 @@ import {
 } from "./settings-ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -149,6 +150,7 @@ const AccessLevelPicker = ({ value, onChange }: AccessLevelPickerProps) => {
 
 interface TokenListProps {
   tokens: ApiToken[];
+  notebooks: Notebook[];
   availableScopes: string[];
   newlyCreatedTokenId: string | null;
   isLoading: boolean;
@@ -156,7 +158,7 @@ interface TokenListProps {
   onDelete: (token: ApiToken) => void;
 }
 
-const TokenList = ({ tokens, availableScopes, newlyCreatedTokenId, isLoading, isDeleting, onDelete }: TokenListProps) => {
+const TokenList = ({ tokens, notebooks, availableScopes, newlyCreatedTokenId, isLoading, isDeleting, onDelete }: TokenListProps) => {
   const { t } = useTranslation();
   const [copiedAction, setCopiedAction] = useState<{ tokenId: string; action: "token" | "config" } | null>(null);
 
@@ -197,6 +199,9 @@ const TokenList = ({ tokens, availableScopes, newlyCreatedTokenId, isLoading, is
         const accessLabel = accessLevel === "legacy-custom"
           ? t("mcp.accessLevels.legacy-custom.label")
           : t(`mcp.accessLevels.${accessLevel}.label`);
+        const scopedNotebook = token.mcpNotebookId
+          ? notebooks.find((notebook) => notebook.id === token.mcpNotebookId)
+          : null;
 
         return (
           <div
@@ -238,6 +243,11 @@ const TokenList = ({ tokens, availableScopes, newlyCreatedTokenId, isLoading, is
                     {accessLabel}
                   </span>
                 )}
+                {token.mcpNotebookId ? (
+                  <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-normal text-emerald-700">
+                    {t("mcp.notebookScopeBadge", { name: scopedNotebook?.name ?? token.mcpNotebookId })}
+                  </span>
+                ) : null}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <span>
@@ -332,6 +342,7 @@ export const McpConfigCard = () => {
   const queryClient = useQueryClient();
   const [name, setName] = useState(() => createDefaultTokenName());
   const [accessLevel, setAccessLevel] = useState<TokenAccessLevel>(DEFAULT_TOKEN_ACCESS_LEVEL);
+  const [mcpNotebookId, setMcpNotebookId] = useState("__all__");
   const [newlyCreatedTokenId, setNewlyCreatedTokenId] = useState<string | null>(null);
   const [tokenDeleteConfirmation, setTokenDeleteConfirmation] = useState<ApiToken | null>(null);
 
@@ -342,6 +353,11 @@ export const McpConfigCard = () => {
 
   const availableScopes = tokensQuery.data?.availableScopes ?? ALL_TOKEN_SCOPES;
   const tokens = tokensQuery.data?.apiTokens ?? [];
+  const notebooksQuery = useQuery({
+    queryKey: ["notebooks", "mcp-token-scope"],
+    queryFn: () => api.listNotebooks(),
+  });
+  const notebooks = notebooksQuery.data?.notebooks ?? [];
 
   const createMutation = useMutation({
     mutationFn: api.createApiToken,
@@ -349,6 +365,7 @@ export const McpConfigCard = () => {
       setNewlyCreatedTokenId(data.apiToken.id);
       setName(createDefaultTokenName());
       setAccessLevel(DEFAULT_TOKEN_ACCESS_LEVEL);
+      setMcpNotebookId("__all__");
       await queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
     },
   });
@@ -368,7 +385,11 @@ export const McpConfigCard = () => {
       return;
     }
 
-    createMutation.mutate({ name: name.trim(), scopes });
+    createMutation.mutate({
+      name: name.trim(),
+      scopes,
+      mcpNotebookId: mcpNotebookId === "__all__" ? null : mcpNotebookId,
+    });
   };
 
   return (
@@ -395,6 +416,17 @@ export const McpConfigCard = () => {
                 onChange={(event) => setName(event.target.value)}
                 placeholder={t("mcp.namePlaceholder")}
               />
+              <Select value={mcpNotebookId} onValueChange={setMcpNotebookId}>
+                <SelectTrigger className="h-9 w-full bg-card text-xs font-normal sm:w-52" aria-label={t("mcp.notebookScopeTitle")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="__all__">{t("mcp.allNotebooks")}</SelectItem>
+                  {notebooks.map((notebook) => (
+                    <SelectItem key={notebook.id} value={notebook.id}>{notebook.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <div className="flex flex-wrap items-center gap-2">
                 <AccessLevelPicker
                   value={accessLevel}
@@ -427,6 +459,7 @@ export const McpConfigCard = () => {
             </div>
             <TokenList
               tokens={tokens}
+              notebooks={notebooks}
               availableScopes={availableScopes}
               newlyCreatedTokenId={newlyCreatedTokenId}
               isLoading={tokensQuery.isLoading}

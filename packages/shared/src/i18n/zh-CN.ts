@@ -3712,6 +3712,9 @@ export const zhCN = {
     exampleTitle: "Remote MCP 配置示例",
     copyExample: "复制示例",
     accessLevelTitle: "访问权限",
+    notebookScopeTitle: "MCP 笔记范围",
+    allNotebooks: "全部笔记",
+    notebookScopeBadge: "MCP：{{name}}",
     accessLevels: {
       full: {
         label: "完全访问",
@@ -3734,7 +3737,7 @@ export const zhCN = {
     legacyTokenCannotCopy: "旧 Token 无法复制",
     legacyConfigCannotCopy: "旧 Token 无法复制 MCP 配置",
     deleteToken: "删除 Token",
-    description: "授权网页剪藏插件、MCP 服务及 AI Agent 访问你的笔记。",
+    description: "授权网页剪藏插件、MCP 服务及 AI Agent 访问你的笔记。选择单个笔记本时，Token 仅可用于 MCP，且只能访问该笔记本。",
     namePlaceholder: "Token 名称（如 Chrome 剪藏或 Claude Desktop）",
     createToken: "创建 Token",
     activeTokens: "Token 列表",

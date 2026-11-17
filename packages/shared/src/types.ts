@@ -299,6 +299,7 @@ export type ApiToken = {
   name: string;
   token: string | null;
   scopes: string[];
+  mcpNotebookId: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
   isRevoked: boolean;

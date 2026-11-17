@@ -32,6 +32,7 @@ export type ApiTokenRow = {
   is_revoked: number;
   created_at: string;
   workspace_id: string;
+  mcp_notebook_id: string | null;
 };
 
 type ApiTokenRouteDependencies = {
@@ -43,6 +44,7 @@ export const mapApiToken = (row: ApiTokenRow): ApiToken => ({
   name: row.name,
   token: row.token_value,
   scopes: parseJsonArray(row.scopes_json),
+  mcpNotebookId: row.mcp_notebook_id,
   lastUsedAt: row.last_used_at,
   expiresAt: row.expires_at,
   isRevoked: Boolean(row.is_revoked),
@@ -54,7 +56,7 @@ const getApiTokenRow = (
   id: string,
   workspaceId: string,
 ) => database.prepare(
-  `SELECT id, name, token_value, scopes_json, last_used_at, expires_at, is_revoked, created_at, workspace_id
+  `SELECT id, name, token_value, scopes_json, last_used_at, expires_at, is_revoked, created_at, workspace_id, mcp_notebook_id
    FROM api_tokens
    WHERE id = ? AND workspace_id = ?`,
 ).bind(id, workspaceId).first<ApiTokenRow>();
@@ -68,7 +70,7 @@ export const registerApiTokenRoutes = (
     if (userOnly) return userOnly;
 
     const rows = await context.env.storage.db.prepare(
-      `SELECT id, name, token_value, scopes_json, last_used_at, expires_at, is_revoked, created_at, workspace_id
+      `SELECT id, name, token_value, scopes_json, last_used_at, expires_at, is_revoked, created_at, workspace_id, mcp_notebook_id
        FROM api_tokens
        WHERE workspace_id = ?
        ORDER BY is_revoked ASC, created_at DESC
@@ -97,10 +99,17 @@ export const registerApiTokenRoutes = (
       const now = isoNow();
       const actor = getAuditActor(context);
       const workspaceId = getWorkspaceId(context);
+      const mcpNotebookId = input.mcpNotebookId ?? null;
+      if (mcpNotebookId) {
+        const notebook = await context.env.storage.db.prepare(
+          `SELECT id FROM notebooks WHERE id = ? AND workspace_id = ? AND is_deleted = 0`,
+        ).bind(mcpNotebookId, workspaceId).first<{ id: string }>();
+        if (!notebook) return badRequest(context, "MCP notebook scope is not available.");
+      }
       await context.env.storage.db.batch([
         context.env.storage.db.prepare(
-          `INSERT INTO api_tokens (id, workspace_id, name, token_hash, token_value, scopes_json, expires_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO api_tokens (id, workspace_id, name, token_hash, token_value, scopes_json, expires_at, created_at, mcp_notebook_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).bind(
           id,
           workspaceId,
@@ -110,6 +119,7 @@ export const registerApiTokenRoutes = (
           JSON.stringify(scopes),
           input.expiresAt ?? null,
           now,
+          mcpNotebookId,
         ),
         auditStatement(
           context.env.storage.db,
@@ -118,7 +128,7 @@ export const registerApiTokenRoutes = (
           "api_token.create",
           "api_token",
           id,
-          { name: input.name, scopes, expiresAt: input.expiresAt ?? null },
+          { name: input.name, scopes, expiresAt: input.expiresAt ?? null, mcpNotebookId },
         ),
       ]);
 

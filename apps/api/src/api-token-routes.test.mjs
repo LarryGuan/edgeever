@@ -68,11 +68,13 @@ describe("API token route contracts", () => {
       is_revoked: 0,
       created_at: "2026-08-08T00:00:00.000Z",
       workspace_id: "ws_owner",
+      mcp_notebook_id: null,
     })).toEqual({
       id: "tok_1",
       name: "Reader",
       token: null,
       scopes: ["read:memos"],
+      mcpNotebookId: null,
       lastUsedAt: null,
       expiresAt: null,
       isRevoked: false,

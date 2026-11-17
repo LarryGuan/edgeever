@@ -132,12 +132,15 @@ export const getCurrentWorkspaceIdentity = async (db: DatabaseAdapter, auth: Aut
     },
     authorization: {
       kind: auth.kind === "agent" ? "api_token" : "user_session",
-      ...(auth.kind === "agent" ? { tokenName: auth.username, scopes: auth.scopes } : {}),
+      ...(auth.kind === "agent" ? { tokenName: auth.username, scopes: auth.scopes, mcpNotebookId: auth.mcpNotebookId ?? null } : {}),
     },
     dataIsolation: {
       workspaceScoped: true,
+      notebookScoped: Boolean(auth.mcpNotebookId),
       statement:
-        "Every notebook and memo returned by this MCP server belongs to this workspace; data from other users is excluded.",
+        auth.mcpNotebookId
+          ? "This MCP token can access notes in exactly one notebook; other notebooks are excluded."
+          : "Every notebook and memo returned by this MCP server belongs to this workspace; data from other users is excluded.",
     },
   };
 };

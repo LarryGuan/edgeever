@@ -265,6 +265,7 @@ export const ApiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(80),
   scopes: z.array(z.string().trim().min(1).max(80)).min(1).max(32),
   expiresAt: z.string().datetime().nullable().optional(),
+  mcpNotebookId: z.string().trim().min(1).max(160).nullable().optional(),
 });
 
 export const TagRenameSchema = z.object({

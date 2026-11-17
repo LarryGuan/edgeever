@@ -3900,6 +3900,9 @@ export const de = {
     "exampleTitle": "Beispiel für Remote-MCP-Konfiguration",
     "copyExample": "Beispiel kopieren",
     "accessLevelTitle": "Zugriffsebene",
+    "notebookScopeTitle": "MCP-Notizbereich",
+    "allNotebooks": "Alle Notizen",
+    "notebookScopeBadge": "MCP: {{name}}",
     "accessLevels": {
       "full": {
         "label": "Vollzugriff",

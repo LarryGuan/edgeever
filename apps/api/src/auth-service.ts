@@ -295,7 +295,7 @@ const authenticateBearerToken = async (c: AppContext, touch: boolean): Promise<A
   }
 
   const row = await c.env.storage.db.prepare(
-    `SELECT id, name, token_value, scopes_json, last_used_at, expires_at, is_revoked, created_at, workspace_id
+    `SELECT id, name, token_value, scopes_json, last_used_at, expires_at, is_revoked, created_at, workspace_id, mcp_notebook_id
      FROM api_tokens
      WHERE token_hash = ?
        AND is_revoked = 0
@@ -336,6 +336,7 @@ const authenticateBearerToken = async (c: AppContext, touch: boolean): Promise<A
     workspaceId: row.workspace_id,
     role: "member",
     tokenId: row.id,
+    mcpNotebookId: row.mcp_notebook_id,
   };
 };
 

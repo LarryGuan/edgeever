@@ -75,6 +75,22 @@ const createFixture = (scopes = ["read:memos", "write:memos"]) => {
 };
 
 describe("MCP template and AI instruction management", () => {
+  test("enforces a token notebook scope through the real MCP dispatcher", async () => {
+    const { sqlite, auth, context } = createFixture();
+    sqlite.query("INSERT INTO notebooks (id, workspace_id, name) VALUES ('nb_allowed', 'ws_mcp', 'Allowed')").run();
+    sqlite.query("INSERT INTO notebooks (id, workspace_id, name) VALUES ('nb_other', 'ws_mcp', 'Other')").run();
+    const allowed = await callMcpTool(context, auth, "create_memo", { notebookId: "nb_allowed", title: "Allowed" });
+    const other = await callMcpTool(context, auth, "create_memo", { notebookId: "nb_other", title: "Other" });
+    const scoped = { ...auth, mcpNotebookId: "nb_allowed" };
+
+    expect((await callMcpTool(context, scoped, "list_memos", {})).memos.map((memo) => memo.id))
+      .toEqual([allowed.memo.id]);
+    await expect(callMcpTool(context, scoped, "get_memo", { memoId: other.memo.id }))
+      .rejects.toMatchObject({ code: "not_found", status: 404 });
+    await expect(callMcpTool(context, scoped, "create_memo", { notebookId: "nb_other", title: "Denied" }))
+      .rejects.toMatchObject({ code: "not_found", status: 404 });
+  });
+
   test("search snippets expose bounded body matches and preserve summary and access rules", async () => {
     const { sqlite, auth, context } = createFixture();
     sqlite.query("INSERT INTO notebooks (id, workspace_id, name) VALUES ('nb_search', 'ws_mcp', 'Search')").run();

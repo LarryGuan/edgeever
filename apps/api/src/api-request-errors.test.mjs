@@ -4,6 +4,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clampNumber } from "./entity-utils.ts";
+import { sha256 } from "./hash-utils.ts";
 import { fetchEdgeEverApp } from "./index.ts";
 import { createSelfHostedStorageAdapter } from "./self-hosted-storage-adapter.ts";
 
@@ -14,7 +15,7 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-const createEnvironment = async () => {
+const createEnvironment = async ({ requireAuth = false } = {}) => {
   const directory = await mkdtemp(`${tmpdir()}/edgeever-request-errors-`);
   temporaryDirectories.push(directory);
   const database = new Database(join(directory, "edgeever.sqlite"), { create: true });
@@ -27,7 +28,9 @@ const createEnvironment = async () => {
   database.query("INSERT OR IGNORE INTO workspaces (id, name, is_personal) VALUES ('ws_default', 'Personal', 1)").run();
   return {
     storage: createSelfHostedStorageAdapter(database, join(directory, "resources")),
-    EDGE_EVER_ALLOW_UNAUTHENTICATED: "true",
+    ...(requireAuth
+      ? { EDGE_EVER_AUTH_PASSWORD: "configured-for-test" }
+      : { EDGE_EVER_ALLOW_UNAUTHENTICATED: "true" }),
     EDGE_EVER_RUNTIME: "self-hosted-bun",
   };
 };
@@ -74,6 +77,27 @@ describe("API request errors", () => {
 
     expect(response.status).toBe(200);
     expect(Array.isArray((await response.json()).memos)).toBe(true);
+  });
+
+  test("blocks notebook-scoped MCP tokens from the REST API", async () => {
+    const environment = await createEnvironment({ requireAuth: true });
+    const token = "notebook-scoped-rest-block-test";
+    await environment.storage.db.prepare(
+      `INSERT INTO api_tokens (id, workspace_id, name, token_hash, scopes_json, mcp_notebook_id)
+       VALUES ('tok_scoped', 'ws_default', 'Scoped', ?, '["read:memos"]', 'nb_inbox')`,
+    ).bind(await sha256(token)).run();
+
+    const response = await request(environment, "/api/v1/memos", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "mcp_only_token",
+        message: "This notebook-scoped token can only be used with the MCP endpoint.",
+      },
+    });
   });
 
   test("clamps limits and offsets to whole numbers", () => {

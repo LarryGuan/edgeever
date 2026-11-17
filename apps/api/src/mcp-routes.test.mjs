@@ -240,6 +240,21 @@ describe("MCP HTTP routes", () => {
     });
   });
 
+  test("hides workspace-wide tools from notebook-scoped tokens", async () => {
+    const response = await createApp({
+      authenticateRequest: async () => ({ ...auth, mcpNotebookId: "nb_allowed" }),
+    }).request(
+      "/mcp",
+      mcpRequest({ jsonrpc: "2.0", id: 20, method: "tools/list" }),
+    );
+    const names = (await response.json()).result.tools.map((tool) => tool.name);
+    expect(names).toContain("search_memos");
+    expect(names).toContain("get_memo");
+    expect(names).not.toContain("get_workspace_stats");
+    expect(names).not.toContain("rename_tag");
+    expect(names).not.toContain("create_notebook");
+  });
+
   test("reports a rejected bearer token as invalid_token", async () => {
     const response = await createApp({ authenticateRequest: async () => null }).request(
       "/mcp",

@@ -3900,6 +3900,9 @@ export const fr = {
     exampleTitle: "Exemple de configuration MCP distante",
     copyExample: "Copier l'exemple",
     accessLevelTitle: "Niveau d'accès",
+    notebookScopeTitle: "Périmètre des notes MCP",
+    allNotebooks: "Toutes les notes",
+    notebookScopeBadge: "MCP : {{name}}",
     accessLevels: {
       full: {
         label: "Accès complet",

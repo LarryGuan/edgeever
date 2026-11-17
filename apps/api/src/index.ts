@@ -337,6 +337,10 @@ app.use("/api/v1/*", async (c, next) => {
     );
   }
 
+  if (auth.kind === "agent" && auth.mcpNotebookId) {
+    return apiError(c, "mcp_only_token", "This notebook-scoped token can only be used with the MCP endpoint.", 403);
+  }
+
   c.set("auth", auth);
   await next();
 });

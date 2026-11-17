@@ -12,6 +12,7 @@ import {
   type JsonRpcRequest,
 } from "./mcp-json-rpc";
 import { MCP_TOOLS } from "./mcp-tools";
+import { isMcpToolAvailableForAuth } from "./mcp-notebook-scope";
 import { posterToolImage } from "./poster-tool-output";
 
 const MODERN_MCP_PROTOCOL_VERSION = "2026-07-28" as const;
@@ -231,7 +232,7 @@ export const handleMcpMessage = async (
   }
 
   if (request.method === "tools/list") {
-    const result = { tools: MCP_TOOLS };
+    const result = { tools: MCP_TOOLS.filter((tool) => isMcpToolAvailableForAuth(auth, tool.name)) };
     return {
       body: jsonRpcResult(
         request.id ?? null,

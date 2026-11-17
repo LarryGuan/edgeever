@@ -1371,7 +1371,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
 
     listApiTokens: () => request<ListApiTokensResponse>("/api/v1/api-tokens"),
 
-    createApiToken: (payload: { name: string; scopes: string[]; expiresAt?: string | null }) =>
+    createApiToken: (payload: { name: string; scopes: string[]; expiresAt?: string | null; mcpNotebookId?: string | null }) =>
       request<CreatedApiToken>("/api/v1/api-tokens", {
         method: "POST",
         body: JSON.stringify(payload),

@@ -3712,6 +3712,9 @@ export const zhTW = {
     exampleTitle: "Remote MCP 配置示例",
     copyExample: "複製示例",
     accessLevelTitle: "訪問許可權",
+    notebookScopeTitle: "MCP 筆記範圍",
+    allNotebooks: "全部筆記",
+    notebookScopeBadge: "MCP：{{name}}",
     accessLevels: {
       full: {
         label: "完全訪問",

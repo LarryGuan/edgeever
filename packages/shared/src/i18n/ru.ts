@@ -3713,6 +3713,9 @@ export const ru = {
     exampleTitle: "Пример удалённой конфигурации MCP",
     copyExample: "Копировать пример",
     accessLevelTitle: "Уровень доступа",
+    notebookScopeTitle: "Область заметок MCP",
+    allNotebooks: "Все заметки",
+    notebookScopeBadge: "MCP: {{name}}",
     accessLevels: {
       full: {
         label: "Полный доступ",

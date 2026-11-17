@@ -3702,6 +3702,9 @@ export const ja = {
     exampleTitle: "Remote MCP の設定例",
     copyExample: "例をコピー",
     accessLevelTitle: "アクセスレベル",
+    notebookScopeTitle: "MCP ノート範囲",
+    allNotebooks: "すべてのノート",
+    notebookScopeBadge: "MCP：{{name}}",
     accessLevels: {
       full: {
         label: "フルアクセス",

@@ -3702,6 +3702,9 @@ export const pl = {
     exampleTitle: "Przykład konfiguracji zdalnego MCP",
     copyExample: "Kopiuj przykład",
     accessLevelTitle: "Poziom dostępu",
+    notebookScopeTitle: "Zakres notatek MCP",
+    allNotebooks: "Wszystkie notatki",
+    notebookScopeBadge: "MCP: {{name}}",
     accessLevels: {
       full: {
         label: "Pełny dostęp",

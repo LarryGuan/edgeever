@@ -3695,6 +3695,9 @@ export const enUS = {
     exampleTitle: "Remote MCP configuration example",
     copyExample: "Copy example",
     accessLevelTitle: "Access level",
+    notebookScopeTitle: "MCP note scope",
+    allNotebooks: "All notes",
+    notebookScopeBadge: "MCP: {{name}}",
     accessLevels: {
       full: {
         label: "Full access",
@@ -3717,7 +3720,7 @@ export const enUS = {
     legacyTokenCannotCopy: "Old token cannot be copied",
     legacyConfigCannotCopy: "MCP config cannot be copied for old tokens",
     deleteToken: "Delete token",
-    description: "Authorize Web Clipper, MCP services, and AI Agents to access your notes.",
+    description: "Authorize Web Clipper, MCP services, and AI Agents to access your notes. Selecting one notebook makes the token MCP-only and limits it to that notebook.",
     namePlaceholder: "Token name (e.g. Chrome Clipper or Claude Desktop)",
     createToken: "Create Token",
     activeTokens: "Token list",
