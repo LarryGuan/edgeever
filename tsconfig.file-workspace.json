@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.json",
+  "files": ["types/file-workspace-vendors.d.ts"],
   "include": ["apps/api/src/**/*.ts", "packages/**/*.ts", "apps/web/src/vite-env.d.ts"],
   "exclude": ["apps/site", "apps/extension", "apps/mobile", "apps/ios"]
 }

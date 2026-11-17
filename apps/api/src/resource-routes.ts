@@ -1,6 +1,6 @@
-import { isPdfAttachment, resolvePlayableMediaMimeType, ResourceUpdateSchema, type MemoDetail, type Resource } from "@edgeever/shared";
+import { resolveResourceUploadMimeType, ResourceUpdateSchema, type MemoDetail, type Resource } from "@edgeever/shared";
 import { zValidator } from "@hono/zod-validator";
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { auditStatement } from "./audit";
 import type { AppContext, AppEnv, AuditActor } from "./api-context";
 import { AppError } from "./app-error";
@@ -8,11 +8,11 @@ import { parseByteRange, rangeNotSatisfiable } from "./byte-range";
 import { isoNow } from "./entity-utils";
 import { apiError, badRequest, notFound } from "./http-errors";
 import { resolveObjectStorage } from "./object-storage";
+import { getPendingResourceBlobRow } from "./pending-resource-service";
 import {
   SUPPORTED_IMAGE_MIME_TYPES,
-  contentDispositionAttachment,
-  contentDispositionInline,
   listResourcesForMemo,
+  setResourceContentHeaders,
   mapResource,
   mapResourceListItem,
   mapResourceStorageSummary,
@@ -22,7 +22,7 @@ import {
   type ResourceStatsRow,
 } from "./resource-service";
 import type { initiateResourceUpload as initiateResourceUploadService } from "./resource-upload-service";
-import { getAuditActor, getWorkspaceId, requireScopes } from "./request-auth";
+import { getAuditActor, getWorkspaceId, requireAnyScopes, requireScopes } from "./request-auth";
 import type { DatabaseAdapter } from "./storage-contract";
 
 type ResourceRouteDependencies = {
@@ -71,6 +71,7 @@ type ResourceRouteDependencies = {
     resourceId: string;
     expectedContentHash: string;
     filename: string;
+    preserveFilename?: boolean;
     mimeType: string;
     bytes: Uint8Array;
     actor: AuditActor;
@@ -133,15 +134,8 @@ export const registerResourceRoutes = (
     return context.json({ resources: await listResourcesForMemo(context.env.storage.db, getWorkspaceId(context), memo.id) });
   });
 
-  app.get("/api/v1/resources/:id", async (context) => {
-    const denied = requireScopes(context, "read:resources");
-    if (denied) return denied;
-    const resource = await dependencies.getResourceRow(context.env.storage.db, getWorkspaceId(context), context.req.param("id"));
-    return resource ? context.json({ resource: mapResource(resource) }) : notFound(context, "Resource not found");
-  });
-
   app.post("/api/v1/memos/:id/resources", async (context) => {
-    const denied = requireScopes(context, "write:resources");
+    const denied = requireAnyScopes(context, ["write:memos"], ["write:resources"]);
     if (denied) return denied;
 
     const declaredRequestBytes = Number(context.req.header("Content-Length"));
@@ -182,7 +176,7 @@ export const registerResourceRoutes = (
     const input = {
       memoId,
       filename: file.name,
-      mimeType: file.type || "application/octet-stream",
+      mimeType: resolveResourceUploadMimeType(file.name, file.type),
       bytes: new Uint8Array(await file.arrayBuffer()),
       actor: getAuditActor(context),
     };
@@ -199,7 +193,7 @@ export const registerResourceRoutes = (
   });
 
   app.post("/api/v1/memos/:id/resource-uploads", async (context) => {
-    const denied = requireScopes(context, "write:resources");
+    const denied = requireAnyScopes(context, ["write:memos"], ["write:resources"]);
     if (denied) return denied;
 
     const memoId = context.req.param("id");
@@ -234,7 +228,7 @@ export const registerResourceRoutes = (
   });
 
   app.put("/api/v1/resource-uploads/:id/parts/:partNumber", async (context) => {
-    const denied = requireScopes(context, "write:resources");
+    const denied = requireAnyScopes(context, ["write:memos"], ["write:resources"]);
     if (denied) return denied;
 
     const body = context.req.raw.body;
@@ -262,7 +256,7 @@ export const registerResourceRoutes = (
   });
 
   app.post("/api/v1/resource-uploads/:id/complete", async (context) => {
-    const denied = requireScopes(context, "write:resources");
+    const denied = requireAnyScopes(context, ["write:memos"], ["write:resources"]);
     if (denied) return denied;
     try {
       const resource = await dependencies.completeResourceUpload(
@@ -277,7 +271,7 @@ export const registerResourceRoutes = (
   });
 
   app.delete("/api/v1/resource-uploads/:id", async (context) => {
-    const denied = requireScopes(context, "write:resources");
+    const denied = requireAnyScopes(context, ["write:memos"], ["write:resources"]);
     if (denied) return denied;
     try {
       await dependencies.abortResourceUpload(context, context.req.param("id"));
@@ -292,6 +286,12 @@ export const registerResourceRoutes = (
     if (denied) return denied;
 
     const resource = await dependencies.getResourceRow(
+      context.env.storage.db,
+      getWorkspaceId(context),
+      context.req.param("id"),
+    ) ?? await getPendingResourceBlobRow(
+      // An uploaded file not yet bound to a memo is readable by its workspace
+      // at the same URL it keeps after binding.
       context.env.storage.db,
       getWorkspaceId(context),
       context.req.param("id"),
@@ -310,13 +310,6 @@ export const registerResourceRoutes = (
 
     const headers = new Headers();
     object.writeHttpMetadata(headers);
-    const playableMimeType = resolvePlayableMediaMimeType(resource.mime_type, resource.filename);
-    headers.set(
-      "Content-Type",
-      isPdfAttachment(resource.mime_type, resource.filename)
-        ? "application/pdf"
-        : playableMimeType ?? resource.mime_type ?? headers.get("Content-Type") ?? "application/octet-stream",
-    );
     headers.set("Cache-Control", headers.get("Cache-Control") ?? "private, max-age=3600");
     headers.set("Accept-Ranges", "bytes");
     if (byteRange.kind === "range") {
@@ -329,17 +322,26 @@ export const registerResourceRoutes = (
     } else {
       headers.set("Content-Length", String(resource.byte_size));
     }
-    headers.set(
-      "Content-Disposition",
-      resource.kind === "image" || isPdfAttachment(resource.mime_type, resource.filename) || playableMimeType
-        ? contentDispositionInline(resource.filename)
-        : contentDispositionAttachment(resource.filename),
-    );
-    headers.set("X-Content-Type-Options", "nosniff");
+    setResourceContentHeaders(headers, resource);
     return new Response(object.body, { headers, status: byteRange.kind === "range" ? 206 : 200 });
   });
 
-  app.put("/api/v1/resources/:id/blob", async (context) => {
+  app.get("/api/v1/resources/writeback-capabilities", context => {
+    const denied = requireScopes(context, "write:resources");
+    if (denied) return denied;
+    context.header("Cache-Control", "no-store");
+    return context.json({ preserveFilename: true });
+  });
+
+  app.get("/api/v1/resources/:id", async (context) => {
+    const denied = requireScopes(context, "read:resources");
+    if (denied) return denied;
+    const resource = await dependencies.getResourceRow(context.env.storage.db, getWorkspaceId(context), context.req.param("id"));
+    return resource ? context.json({ resource: mapResource(resource) }) : notFound(context, "Resource not found");
+  });
+
+  const replaceBlob = (preserveFilename = false) => async (context: Context<AppEnv, "/api/v1/resources/:id/blob" | "/api/v1/resources/:id/blob/writeback">) => {
+    if (preserveFilename) context.header("X-EdgeEver-Writeback", "preserve-filename");
     const denied = requireScopes(context, "write:resources");
     if (denied) return denied;
 
@@ -368,6 +370,7 @@ export const registerResourceRoutes = (
         resourceId: context.req.param("id"),
         expectedContentHash,
         filename: typeof declaredFilename === "string" && declaredFilename.trim() ? declaredFilename : file.name,
+        preserveFilename: preserveFilename || form.get("preserveFilename") === "true",
         mimeType: typeof declaredMimeType === "string" && declaredMimeType.trim()
           ? declaredMimeType
           : file.type || "application/octet-stream",
@@ -378,7 +381,9 @@ export const registerResourceRoutes = (
     } catch (error) {
       return appErrorResponse(context, error);
     }
-  });
+  };
+  app.put("/api/v1/resources/:id/blob", replaceBlob());
+  app.put("/api/v1/resources/:id/blob/writeback", replaceBlob(true));
 
   app.patch(
     "/api/v1/resources/:id",

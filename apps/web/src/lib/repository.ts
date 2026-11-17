@@ -1,4 +1,7 @@
-import { markdownToDoc, type MemoDetail, type MemoRevision, type MemoSummary, type MemoTemplate, type Notebook, type Resource, type ResourceListItem, type ResourceStorageSummary, type TagSummary, type TiptapDoc } from "@edgeever/shared";
+import type { NotebookUpdateInput } from "@edgeever/shared";
+import { assertLocalMemoSnapshot } from "./local-memo-guard";
+import { localizeDefaultMemoTemplate } from "@edgeever/shared/memo-template-seeds";
+import { markdownToDoc, type MemoDetail, type MemoRevision, type MemoTemplate, type Notebook, type Resource, type ResourceListItem, type ResourceStorageSummary, type TagSummary, type TiptapDoc } from "@edgeever/shared";
 import { api } from "@/lib/api";
 import {
   getLocalMemo,
@@ -17,8 +20,10 @@ import {
   applyLocalEmptyTrash,
   applyLocalMemoPin,
   updateLocalNotebook,
-  deleteLocalNotebook,
+  deleteLocalNotebookTree,
   createLocalNotebook,
+  readNotebookSyncGuards,
+  reconcileLocalNotebooks,
   createLocalTemplate,
   updateLocalTemplate,
   mergeLocalMemos,
@@ -44,7 +49,7 @@ import { localDb, type MemoUpdateSyncPayload } from "@/lib/local-db";
 import { runLocalDatabaseOperationWithRecovery } from "@/lib/local-database-recovery";
 import { createDesktopRepository } from "@/lib/desktop-repository";
 import { isBrowserOffline } from "@/lib/network-status";
-import { notifySyncQueueDeferred } from "@/lib/sync-events";
+import { NOTEBOOK_LIST_REFRESHED_EVENT, notifySyncQueueDeferred, type NotebookListRefresh } from "@/lib/sync-events";
 import { isActiveLocalMemoUpdateStatus, shouldAcceptRemoteMemoDetail } from "@/lib/memo-detail-freshness";
 import { cacheLocalResourceBytes, getCachedLocalResourceBytes } from "@/lib/local-resource-cache";
 import { withRepositoryMutationEvents } from "@/lib/repository-events";
@@ -52,14 +57,15 @@ import { withRepositoryMutationEvents } from "@/lib/repository-events";
 export type EdgeEverRepository = {
   listNotebooks(): Promise<{ notebooks: Notebook[] }>;
   createNotebook(input: { name: string; parentId?: string | null }): Promise<{ notebook: Notebook }>;
-  updateNotebook(notebookId: string, input: { name?: string; parentId?: string | null; sortOrder?: number }): Promise<{ notebook: Notebook }>;
+  updateNotebook(notebookId: string, input: NotebookUpdateInput): Promise<{ notebook: Notebook }>;
   deleteNotebook(notebookId: string): Promise<{ ok: true }>;
   restoreNotebook(notebookId: string): Promise<{ notebook: Notebook }>;
   listTemplates(): Promise<{ templates: MemoTemplate[] }>;
   createTemplate(input: { name: string; description?: string | null; memoId?: string; title?: string | null; contentMarkdown?: string; tags?: string[] }): Promise<{ template: MemoTemplate }>;
   updateTemplate(templateId: string, input: { name?: string; description?: string | null; title?: string | null; contentMarkdown?: string; tags?: string[] }): Promise<{ template: MemoTemplate }>;
   deleteTemplate(templateId: string): Promise<{ ok: true }>;
-  useTemplate(templateId: string, notebookId: string): Promise<{ memo: MemoDetail }>;
+  /** With `locale`, an unedited default template is used in that UI language. */
+  useTemplate(templateId: string, notebookId: string, locale?: string): Promise<{ memo: MemoDetail }>;
   uploadMemoResource(memoId: string, file: File): Promise<{ resource: Resource }>;
   readResource(resourceId: string): Promise<Blob>;
   updateResource(resourceId: string, file: File, expectedContentHash: string): Promise<{ resource: Resource }>;
@@ -74,10 +80,15 @@ export type EdgeEverRepository = {
   emptyTrash(): Promise<{ ok: true; deleted: number }>;
   pinMemos(input: { memoIds: string[]; isPinned: boolean }): Promise<{ ok: true; updated: number }>;
   mergeMemos(input: { memoIds: string[]; notebookId?: string; title?: string }): Promise<{ memo: MemoDetail }>;
+  /**
+   * Copies a note, its tags and its files on the server. Requires a connection;
+   * local edits of the note are synchronized first so the copy includes them.
+   */
+  duplicateMemo(memoId: string, input?: { notebookId?: string; title?: string }): Promise<{ memo: MemoDetail }>;
   listMemos(params: LocalMemoListParams): Promise<LocalMemoListResponse>;
   getMemo(memoId: string, includeDeleted?: boolean): Promise<{ memo: MemoDetail }>;
   createMemo(input: { notebookId: string; title?: string; contentJson?: TiptapDoc; contentMarkdown?: string; tags?: string[] }): Promise<{ memo: MemoDetail }>;
-  updateMemo(memo: MemoDetail, input: Omit<MemoUpdateSyncPayload, "memoId">): Promise<{ memo: MemoDetail; queued: true }>;
+  updateMemo(memo: MemoDetail, input: Omit<MemoUpdateSyncPayload, "memoId">, options?: { guardLocalSnapshot?: boolean }): Promise<{ memo: MemoDetail; queued: true }>;
   /**
    * Drop the local conflicted draft for a note and replace the local copy with
    * the authoritative cloud memo so the editor can rehydrate cleanly.
@@ -178,19 +189,50 @@ const acceptRemoteMemoDetail = async (
   return true;
 };
 
+const notebookListGeneration = new Map<string, number>();
+
+const beginNotebookListRefresh = (scope: string) => {
+  const generation = (notebookListGeneration.get(scope) ?? 0) + 1;
+  notebookListGeneration.set(scope, generation);
+  return generation;
+};
+
+const applyRemoteNotebookList = async (scope: string, notebooks: Notebook[], generation: number) => {
+  if (notebookListGeneration.get(scope) !== generation) return false;
+  return localDb.transaction("rw", [localDb.notebooks, localDb.syncQueue], async () => {
+    const guards = await readNotebookSyncGuards(scope);
+    if (notebookListGeneration.get(scope) !== generation) return false;
+    return reconcileLocalNotebooks(scope, notebooks, guards.pendingDeleteIds, guards.pendingCreateIds, guards.pendingUpdateIds);
+  });
+};
+
 export const createWebRepository = (scope: string): EdgeEverRepository => {
   const isOffline = isBrowserOffline;
 
   return ({
   async listNotebooks() {
+    const generation = beginNotebookListRefresh(scope);
     const local = await listLocalNotebooks(scope);
     if (local.notebooks.length > 0 || isOffline()) {
-      if (!isOffline()) void api.listNotebooks().then((remote) => Promise.all(remote.notebooks.map((notebook) => putLocalNotebook(scope, notebook)))).catch(() => {});
+      if (!isOffline()) {
+        void api.listNotebooks()
+          .then(async (remote) => {
+            if (!await applyRemoteNotebookList(scope, remote.notebooks, generation)) return;
+            const refreshed = await listLocalNotebooks(scope);
+            if (notebookListGeneration.get(scope) !== generation) return;
+            // The local-first query already returned, so updating IndexedDB
+            // alone cannot update the notebook tree that is on screen.
+            window.dispatchEvent(new CustomEvent<NotebookListRefresh>(NOTEBOOK_LIST_REFRESHED_EVENT, {
+              detail: { scope, notebooks: refreshed.notebooks },
+            }));
+          })
+          .catch(() => {});
+      }
       return local;
     }
 
     const remote = await api.listNotebooks();
-    await Promise.all(remote.notebooks.map((notebook) => putLocalNotebook(scope, notebook)));
+    await applyRemoteNotebookList(scope, remote.notebooks, generation);
     return remote;
   },
 
@@ -202,21 +244,24 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
   },
 
   async updateNotebook(notebookId, input) {
-    const local = await updateLocalNotebook(scope, notebookId, input);
+    const local = await localDb.transaction("rw", [localDb.notebooks, localDb.syncQueue], async () => {
+      const notebook = await updateLocalNotebook(scope, notebookId, input);
+      if (notebook) await queueLocalAction(scope, "notebook.update", notebookId, { notebookId, ...input });
+      return notebook;
+    });
     if (!local) {
       if (isOffline()) throw new Error("Notebook is not available in the local mirror");
       const result = await api.updateNotebook(notebookId, input);
       await putLocalNotebook(scope, result.notebook);
       return result;
     }
-    await queueLocalAction(scope, "notebook.update", notebookId, { notebookId, ...input });
     window.dispatchEvent(new CustomEvent("edgeever:sync-queue-changed"));
     return { notebook: local };
   },
 
   async deleteNotebook(notebookId) {
-    await deleteLocalNotebook(scope, notebookId);
-    await queueLocalAction(scope, "notebook.delete", notebookId, { notebookId });
+    const notebookIds = await deleteLocalNotebookTree(scope, notebookId);
+    await queueLocalAction(scope, "notebook.delete", notebookId, { notebookId, notebookIds });
     window.dispatchEvent(new CustomEvent("edgeever:sync-queue-changed"));
     return { ok: true as const };
   },
@@ -262,11 +307,12 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
     window.dispatchEvent(new CustomEvent("edgeever:sync-queue-changed"));
     return { ok: true as const };
   },
-  useTemplate: async (templateId, notebookId) => {
-    const template = (await listLocalTemplates(scope)).templates.find((candidate) => candidate.id === templateId);
+  useTemplate: async (templateId, notebookId, locale) => {
+    const stored = (await listLocalTemplates(scope)).templates.find((candidate) => candidate.id === templateId);
+    const template = stored && locale ? localizeDefaultMemoTemplate(stored, locale) : stored;
     if (!template) {
       if (isOffline()) throw new Error("Template is not available offline");
-      const result = await api.useTemplate(templateId, notebookId);
+      const result = await api.useTemplate(templateId, notebookId, locale);
       await putLocalMemo(scope, result.memo);
       return result;
     }
@@ -390,8 +436,11 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
     return { ok: true as const, deleted };
   },
   emptyTrash: async () => {
+    const memoIds = (await localDb.memos.where("scope").equals(scope).toArray())
+      .filter((memo) => memo.isDeleted)
+      .map((memo) => memo.id);
     const deleted = await applyLocalEmptyTrash(scope);
-    await queueLocalAction(scope, "memo.emptyTrash", "trash", {});
+    await queueLocalAction(scope, "memo.emptyTrash", "trash", { memoIds });
     window.dispatchEvent(new CustomEvent("edgeever:sync-queue-changed"));
     return { ok: true as const, deleted };
   },
@@ -412,6 +461,22 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
     return { memo };
   },
 
+  duplicateMemo: async (memoId, input = {}) => {
+    if (isOffline()) throw new Error("memo_duplicate_offline");
+    // The server copies what it stores, so every queued change of the note,
+    // including an unresolved conflict, must reach it first.
+    const hasQueuedChange = async () => (await localDb.syncQueue.where("memoId").equals(memoId).toArray())
+      .some((item) => !item.scope || item.scope === scope);
+    if (await hasQueuedChange()) {
+      // A failed synchronization leaves the change queued, which is reported below.
+      await syncLocalMirror(scope).catch(() => undefined);
+      if (await hasQueuedChange()) throw new Error("memo_duplicate_pending_changes");
+    }
+    const result = await api.duplicateMemo(memoId, input);
+    await putLocalMemo(scope, result.memo);
+    return result;
+  },
+
   async listMemos(params) {
     if (await isLocalMirrorInitialized(scope) || await hasLocalMirrorData(scope)) {
       return listLocalMemos(scope, params);
@@ -419,13 +484,15 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
 
     const remote = await api.listMemos({
       notebookId: params.notebookId,
-      includeDescendants: Boolean(params.notebookIds?.length),
+      includeTotal: params.includeTotal,
+      // The scope reaches sub-notebooks only when it lists more than the notebook itself.
+      includeDescendants: Boolean(params.notebookIds?.some((notebookId) => notebookId !== params.notebookId)),
       q: params.q,
       tag: params.tag,
       trash: params.trash,
       filter: params.filter,
       sort: params.sort,
-      cursor: params.offset ? String(params.offset) : null,
+      cursor: params.cursor ?? (params.offset ? String(params.offset) : null),
       limit: params.limit,
     });
     return remote;
@@ -508,10 +575,15 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
     return { memo };
   },
 
-  async updateMemo(memo, input) {
+  async updateMemo(memo, input, options) {
     const payload: MemoUpdateSyncPayload = { ...input, memoId: memo.id };
     const updated = await runLocalDatabaseOperationWithRecovery(() =>
       localDb.transaction("rw", [localDb.memos, localDb.syncQueue], async () => {
+        if (options?.guardLocalSnapshot) {
+          const current = await getLocalMemo(scope, memo.id);
+          const queued = await localDb.syncQueue.get(`memo.update:${memo.id}`);
+          assertLocalMemoSnapshot(current, memo, queued?.status === "conflict");
+        }
         const nextMemo = await putLocalMemoUpdate(scope, memo, payload);
         await putMemoUpdateQueueItem(payload, scope);
         return nextMemo;

@@ -13,7 +13,7 @@ export const loadPluginMarketplace = async (
   registryUrl = DEFAULT_PLUGIN_REGISTRY_URL,
   request: typeof fetch = window.fetch.bind(window),
   baseUrl = import.meta.env.BASE_URL,
-  locationHref = window.location.href,
+  locationHref = globalThis.window?.location?.href ?? "http://localhost/",
 ): Promise<MarketplaceRegistry> => {
   const url = resolveAppAssetUrl(registryUrl, baseUrl, locationHref);
   const response = await request(url, { cache: "no-store", credentials: "omit" });
@@ -24,6 +24,16 @@ export const loadPluginMarketplace = async (
 export interface ResolvedPluginMarketplace extends MarketplaceRegistry {
   resolutionErrors: Record<string, string>;
 }
+
+const withManifestMetadata = (
+  entry: MarketplaceEntry,
+  manifest: Awaited<ReturnType<typeof loadGithubInstallableManifest>>["manifest"],
+): MarketplaceEntry => ({
+  ...entry,
+  name: manifest.name,
+  description: manifest.description ?? entry.description,
+  locales: manifest.locales,
+});
 
 const resolveOfficialGithubEntry = async (
   entry: MarketplaceEntry,
@@ -39,7 +49,7 @@ const resolveOfficialGithubEntry = async (
     throw new Error("Official repository version is older than the marketplace verified version.");
   }
   if (live.manifest.version === entry.verification.version && entry.verification.checksums?.manifestJson) {
-    return entry;
+    return withManifestMetadata(entry, live.manifest);
   }
   const downloaded = await downloadGithubExtension(entry.distribution.repositoryUrl, request, downloadAssetBytes);
   if (downloaded.manifest.id !== entry.id) {
@@ -52,13 +62,13 @@ const resolveOfficialGithubEntry = async (
   if (downloaded.manifest.type === "plugin" && !downloaded.checksums.mainJs) {
     throw new Error("Official plugin release is missing a main.js checksum.");
   }
-  return {
+  return withManifestMetadata({
     ...entry,
     verification: {
       version: downloaded.manifest.version,
       checksums: downloaded.checksums,
     },
-  };
+  }, downloaded.manifest);
 };
 
 export const resolveOfficialPluginMarketplace = async (

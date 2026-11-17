@@ -12,7 +12,7 @@ import { encodeNote, decodeNote } from '../src/file-workspace/metadata.mjs';
 const exec = promisify(execFile);
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 
-test('packed CLI installs independently and supports profiles, HTTP, files and conflicts under Node', async () => {
+test('packed CLI installs independently and supports profiles, HTTP, files and conflicts under Node', { timeout: 30_000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'edgeever-npm-'));
   const env = { ...process.env, EDGEEVER_CONFIG: join(root, 'config.json'), CODEX_HOME: join(root, 'codex'), CLAUDE_CONFIG_DIR: join(root, 'claude'), KIMI_CODE_HOME: join(root, 'kimi') };
   delete env.EDGEEVER_URL; delete env.EDGEEVER_TOKEN;
@@ -27,7 +27,7 @@ test('packed CLI installs independently and supports profiles, HTTP, files and c
     const bin = join(prefix, 'node_modules', 'knowledge-workbench-edgeever-cli', 'bin', 'edgeever.mjs');
     const run = async (...args) => (await exec(process.execPath, [bin, ...args], { cwd: root, env })).stdout;
     assert.match(await run('--help'), /edgeever workspace sync/);
-    assert.equal((await run('--version')).trim(), '0.7.0');
+    assert.equal((await run('--version')).trim(), '0.8.0');
     const installedSkills = JSON.parse(await run('skill', 'install', '--target', 'all'));
     assert.deepEqual(installedSkills.results.map(r => r.status), ['installed', 'installed', 'installed']);
     assert.deepEqual(JSON.parse(await run('skill', 'status')).results.map(r => r.status), ['current', 'current', 'current']);

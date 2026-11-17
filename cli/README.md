@@ -1,6 +1,6 @@
 # EdgeEver CLI for Knowledge Workbench
 
-## Current workflow: CLI 0.7.0
+## Current workflow: CLI 0.8.0
 
 For an existing linked folder (or any child directory), run one command:
 
@@ -63,7 +63,7 @@ From this directory:
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.7.0.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.8.0.tgz
 edgeever --help
 ```
 

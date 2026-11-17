@@ -17,7 +17,7 @@ test("keeps the desktop create-note control compact with one neutral outline", (
   expect(source).toContain('className="group flex h-12 max-w-[calc(100%-2.25rem)]');
   expect(source).toContain('className="group relative flex h-12 min-w-9 flex-1');
   expect(source).toContain('before:inset-y-2.5');
-  expect(source).toContain('data-[state=open]:bg-emerald-50');
+  expect(source).toContain('data-[state=open]:bg-workspace-selection data-[state=open]:text-slate-950');
   expect(source).toContain('t("diagram.moreTypes")');
   expect(source).toContain('group-data-[state=open]:rotate-180');
   expect(source).toContain("edgeever-create-memo-split__more-label");
@@ -45,14 +45,18 @@ test("keeps the desktop sync status bar and sidebar chrome compact without shrin
   expect(source).not.toContain('className="mb-2 space-y-1"');
 });
 
-test("marks diagram note types as beta without labeling regular notes", () => {
+test("lists diagram note types in the create menu without beta badges", () => {
   const createTypeMenu = source.split("const CreateMemoTypeItems")[1]?.split("const getSyncStatusLabel")[0];
-  const regularNoteItem = createTypeMenu?.split('onSelect={() => onCreateMemo()}>')[1]?.split("</DropdownMenuItem>")[0];
-  const betaBadgeCount = createTypeMenu?.match(/<DiagramBetaBadge \/>/g)?.length;
+  const diagramSection = createTypeMenu?.split('onCreateMemo("infographic")')[0];
 
-  expect(regularNoteItem).not.toContain("DiagramBetaBadge");
+  expect(createTypeMenu).toContain('onCreateMemo()');
+  expect(createTypeMenu).toContain('onCreateMemo("mind-map")');
+  expect(createTypeMenu).toContain('onCreateMemo("flowchart")');
   expect(createTypeMenu).toContain('onCreateMemo("architecture")');
-  expect(betaBadgeCount).toBe(3);
+  expect(createTypeMenu).toContain('onCreateMemo("table")');
+  expect(diagramSection).not.toContain("DiagramBetaBadge");
+  expect(diagramSection).not.toContain("Beta");
+  expect(createTypeMenu).toContain("Beta");
 });
 
 describe("NotebookPane sidebar collapse", () => {
@@ -98,16 +102,46 @@ describe("NotebookPane sidebar collapse", () => {
   });
 });
 
+describe("NotebookPane tree expansion persistence", () => {
+  test("stores collapsed branches outside individual tree items", () => {
+    const treeItemSource = readFileSync(new URL("./NotebookTreeItem.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("readNotebookTreeCollapsedIdsPreference");
+    expect(source).toContain("writeNotebookTreeCollapsedIdsPreference(collapsedNotebookIds)");
+    expect(source).toContain("collapsedNotebookIds={collapsedNotebookIds}");
+    expect(treeItemSource).toContain("const open = !collapsedNotebookIds.has(node.id)");
+    expect(treeItemSource).not.toContain("const [open, setOpen] = useState(true)");
+    expect(treeItemSource).not.toContain("if (hasSelectedDescendant) {");
+  });
+
+  test("lets the notebooks heading collapse the list without touching each branch", () => {
+    const catalogs = ["en-US", "zh-CN", "ja", "pl", "ru"].map((locale) =>
+      readFileSync(new URL(`../../../../packages/shared/src/i18n/${locale}.ts`, import.meta.url), "utf8"),
+    );
+
+    expect(source).toContain("readNotebookSectionCollapsedPreference");
+    expect(source).toContain("writeNotebookSectionCollapsedPreference(notebookSectionCollapsed)");
+    expect(source).toContain("data-notebook-section-toggle");
+    expect(source).toContain('t(notebookSectionCollapsed ? "notebookPane.expandNotebooks" : "notebookPane.collapseNotebooks")');
+    expect(source).toContain("{notebookSectionCollapsed ? null : isLoading ? (");
+    expect(source).toContain("setNotebookSectionCollapsed(false)");
+    expect(source).toContain("collapsible={!isLoading && tree.length > 0}");
+
+    for (const catalog of catalogs) {
+      expect(catalog).toContain("collapseNotebooks:");
+      expect(catalog).toContain("expandNotebooks:");
+    }
+  });
+});
+
 describe("NotebookPane client downloads", () => {
-  test("keeps macOS, Windows, and Linux downloads visible in the desktop runtime", () => {
-    expect(source).toContain('t("pwa.sidebarMac") || "macOS"');
-    expect(source).toContain('t("pwa.sidebarWindows") || "Windows"');
-    expect(source).toContain('t("pwa.sidebarLinux") || "Linux"');
-    expect(source).not.toContain("!window.edgeeverDesktop?.isAvailable");
+  const downloads = readFileSync(new URL("./ClientDownloadLinks.tsx", import.meta.url), "utf8");
+  test("keeps sidebar downloads on the web and hides them in the desktop runtime", () => {
+    expect(source).toContain("!window.edgeeverDesktop?.isAvailable && (");
+    expect(source).toContain("<ClientDownloadLinks />");
   });
 
   test("labels Windows and Linux by package format instead of a preview badge", () => {
-    const downloads = source.split('pwa.sidebarDownloadsTitle')[1]?.split("</DropdownMenu>")[0];
 
     expect(downloads).toContain(">AppImage</span>");
     expect(downloads).toContain(">EXE</span>");
@@ -121,11 +155,42 @@ describe("NotebookPane client downloads", () => {
   });
 
   test("renders platform icons inline so desktop protocols do not break them", () => {
-    expect(source).toContain("<BrandIcon path={APPLE_ICON_PATH}");
-    expect(source).toContain("<BrandIcon path={WINDOWS_ICON_PATH}");
-    expect(source).toContain('<BrandIcon path={LINUX_ICON_PATH} className="h-4 w-4"');
-    expect(source).toContain("<GooglePlayIcon />");
-    expect(source).toContain("<AppStoreIcon />");
-    expect(source).not.toContain('src="/icons/platforms/');
+    expect(downloads).toContain("<BrandIcon path={APPLE_ICON_PATH}");
+    expect(downloads).toContain("<BrandIcon path={WINDOWS_ICON_PATH}");
+    expect(downloads).toContain('<BrandIcon path={LINUX_ICON_PATH} className="h-4 w-4"');
+    expect(downloads).toContain("<GooglePlayIcon />");
+    expect(downloads).toContain("<AppStoreIcon />");
+    expect(downloads).toContain("<ChromeIcon />");
+    expect(downloads).not.toContain('src="/icons/platforms/');
+  });
+});
+
+const CLICK_GUARD = `                      aria-disabled="true"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}`;
+
+
+describe("NotebookTreeItem inbox delete affordance", () => {
+  test("explains why the starter Inbox notebook has no working delete action", () => {
+    const treeItemSource = readFileSync(new URL("./NotebookTreeItem.tsx", import.meta.url), "utf8");
+    const catalogs = ["en-US", "zh-CN", "ja", "pl"].map((locale) =>
+      readFileSync(new URL(`../../../../packages/shared/src/i18n/${locale}.ts`, import.meta.url), "utf8"),
+    );
+
+    expect(treeItemSource).toContain('const isInbox = node.slug === "inbox"');
+
+    // 说明必须是始终可见的 inline 文本：原生 title 在 disabled 项上不可达（pointer-events-none，
+    // 且键盘焦点会跳过 disabled 项）。
+    expect(treeItemSource).not.toContain('title={t("notebookTree.inboxDeleteHint")}');
+    expect(treeItemSource.split('t("notebookTree.inboxDeleteHint")').length - 1).toBe(2);
+
+    // 两个菜单各一份：行内操作菜单 + 右键菜单
+    expect(treeItemSource).toContain(CLICK_GUARD);
+    expect(treeItemSource).toContain('<ContextMenuSeparator className="my-1 h-px bg-slate-100" />\n              <div');
+
+    for (const catalog of catalogs) {
+      expect(catalog).toContain("inboxDeleteHint:");
+    }
   });
 });

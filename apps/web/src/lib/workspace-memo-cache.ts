@@ -3,6 +3,8 @@ import {
   createExcerpt,
   docToText,
   getDiagramSummary,
+  getInfographicSummary,
+  getTableSummary,
   resolveMemoContentDoc,
   type MemoDetail,
   type MemoSummary,
@@ -15,6 +17,14 @@ export type ListNotebooksQueryData = {
   notebooks: Notebook[];
 };
 
+export type MemoRemovalCacheSnapshot = {
+  previousMemoLists: Array<[readonly unknown[], MemoListQueryData | undefined]>;
+  previousMemoDetails: Array<[readonly unknown[], { memo: MemoDetail } | undefined]>;
+  previousNotebooks: ListNotebooksQueryData | undefined;
+};
+
+export type TrashClearCacheSnapshot = Pick<MemoRemovalCacheSnapshot, "previousMemoLists" | "previousMemoDetails">;
+
 export const memoDetailQueryKey = (memoId: string, view: MemoView) => ["memo", memoId, view] as const;
 
 export const memoToSummary = (memo: MemoDetail): MemoSummary => ({
@@ -23,6 +33,8 @@ export const memoToSummary = (memo: MemoDetail): MemoSummary => ({
   title: memo.title,
   excerpt: memo.excerpt || createExcerpt(memo.contentText || docToText(resolveMemoContentDoc(memo.contentJson, memo.contentMarkdown))),
   ...getDiagramSummary(memo.contentMarkdown),
+  ...getInfographicSummary(memo.contentMarkdown),
+  ...getTableSummary(memo.contentMarkdown),
   tags: memo.tags,
   isPinned: memo.isPinned,
   isArchived: memo.isArchived,
@@ -35,6 +47,15 @@ export const memoToSummary = (memo: MemoDetail): MemoSummary => ({
 
 export const cacheMemoDetail = (queryClient: QueryClient, memo: MemoDetail, view: MemoView = memo.isDeleted ? "trash" : "notebook") => {
   queryClient.setQueryData(memoDetailQueryKey(memo.id, view), { memo });
+};
+
+export const evictIdleMemoDetails = (queryClient: QueryClient, keepMemoId: string | null) => {
+  queryClient.removeQueries({
+    predicate: (query) => {
+      const [kind, memoId] = query.queryKey;
+      return kind === "memo" && typeof memoId === "string" && memoId !== keepMemoId;
+    },
+  });
 };
 
 export const collectMemoSummariesFromCache = (queryClient: QueryClient, memoIds: Set<string>) => {
@@ -98,6 +119,20 @@ export const clearTrashMemoLists = (queryClient: QueryClient) => {
   }
 };
 
+export const snapshotTrashClearCache = (queryClient: QueryClient): TrashClearCacheSnapshot => ({
+  previousMemoLists: queryClient.getQueriesData<MemoListQueryData>({ queryKey: ["memos"] }),
+  previousMemoDetails: queryClient.getQueriesData<{ memo: MemoDetail }>({ queryKey: ["memo"] }),
+});
+
+export const restoreTrashClearCache = (queryClient: QueryClient, snapshot: TrashClearCacheSnapshot) => {
+  for (const [queryKey, data] of snapshot.previousMemoLists) {
+    queryClient.setQueryData(queryKey, data);
+  }
+  for (const [queryKey, data] of snapshot.previousMemoDetails) {
+    queryClient.setQueryData(queryKey, data);
+  }
+};
+
 export const decrementNotebookMemoCounts = (queryClient: QueryClient, removedMemos: MemoSummary[]) => {
   if (removedMemos.length === 0) {
     return;
@@ -127,6 +162,31 @@ export const decrementNotebookMemoCounts = (queryClient: QueryClient, removedMem
         }
       : current
   );
+};
+
+export const snapshotMemoRemovalCache = (
+  queryClient: QueryClient,
+  detailQueryKey: readonly unknown[] = ["memo"],
+): MemoRemovalCacheSnapshot => ({
+  previousMemoLists: queryClient.getQueriesData<MemoListQueryData>({ queryKey: ["memos"] }),
+  previousMemoDetails: queryClient.getQueriesData<{ memo: MemoDetail }>({ queryKey: detailQueryKey }),
+  previousNotebooks: queryClient.getQueryData<ListNotebooksQueryData>(["notebooks"]),
+});
+
+export const applyMemoRemovalToCache = (queryClient: QueryClient, memoIds: Set<string>) => {
+  const removedMemos = collectMemoSummariesFromCache(queryClient, memoIds);
+  removeMemoSummariesFromLists(queryClient, memoIds);
+  decrementNotebookMemoCounts(queryClient, removedMemos);
+};
+
+export const restoreMemoRemovalCache = (queryClient: QueryClient, snapshot: MemoRemovalCacheSnapshot) => {
+  for (const [queryKey, data] of snapshot.previousMemoLists) {
+    queryClient.setQueryData(queryKey, data);
+  }
+  for (const [queryKey, data] of snapshot.previousMemoDetails) {
+    queryClient.setQueryData(queryKey, data);
+  }
+  queryClient.setQueryData(["notebooks"], snapshot.previousNotebooks);
 };
 
 export const getAdjacentMemoIdAfterRemoval = (memos: MemoSummary[], removedMemoIds: Set<string>, anchorMemoId: string) => {

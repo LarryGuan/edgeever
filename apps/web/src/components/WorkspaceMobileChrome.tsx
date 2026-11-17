@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Boxes, ChevronDown, ChevronRight, FileText, Home, Network, Plus, Search, UserRound, Workflow, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Component, FileText, GitFork, Home, PieChart, Plus, Search, Table2, UserRound, Workflow, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -11,38 +11,47 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
-import type { DiagramKind, Notebook } from "@edgeever/shared";
+import { useDeployedUpdateNotice } from "@/hooks/useDeployedUpdateNotice";
+import { BETA_BADGE_CLASSNAME } from "@/lib/workspace-ui";
+import type { NoteCreateKind, Notebook } from "@edgeever/shared";
 import type { MobileBottomNavItem, NotebookNode } from "@/lib/app-helpers";
 import {
   buildNotebookTree,
   filterNotebookTree,
   getExpandableNotebookIds,
   getNotebookAncestorIds,
-  notebookTreeContainsId,
 } from "@/lib/app-helpers";
 
 const MobileBottomNavButton = ({
   active = false,
   icon,
   label,
+  notice = false,
   onClick,
 }: {
   active?: boolean;
   icon: ReactNode;
   label: string;
+  notice?: boolean;
   onClick: () => void;
 }) => (
   <button
     className={cn(
-      "flex h-mobile-touch flex-col items-center justify-center gap-0.5 rounded-md text-xs font-medium transition-all duration-200",
-      active ? "text-slate-950" : "text-slate-500 hover:bg-slate-100 hover:text-slate-950"
+      "relative mx-auto flex h-12 w-20 flex-col items-center justify-center gap-0.5 rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/25",
+      active
+        ? "font-bold text-slate-950 [&_svg]:text-slate-950"
+        : "text-slate-500 hover:bg-slate-100 hover:text-slate-950"
     )}
     type="button"
     aria-current={active ? "page" : undefined}
     aria-label={label}
     onClick={onClick}
   >
-    {icon}
+    {active ? <span aria-hidden="true" className="absolute top-0 h-0.5 w-5 rounded-full bg-slate-950" /> : null}
+    <span className="relative">
+      {icon}
+      {notice ? <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-card" /> : null}
+    </span>
     <span>{label}</span>
   </button>
 );
@@ -58,11 +67,12 @@ export const MobileBottomNav = ({
   activeItem: MobileBottomNavItem;
   canCreateMemo: boolean;
   isCreating: boolean;
-  onCreateMemo: (kind?: DiagramKind) => void;
+  onCreateMemo: (kind?: NoteCreateKind) => void;
   onHome: () => void;
   onOpenSettings: () => void;
 }) => {
   const { t } = useTranslation();
+  const { unseen: deployedUpdateUnseen } = useDeployedUpdateNotice();
   const createMemoLabel = !canCreateMemo ? t("nav.createDisabled") : isCreating ? t("nav.creating") : t("nav.createMemo");
 
   return (
@@ -75,7 +85,7 @@ export const MobileBottomNav = ({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex h-mobile-touch flex-col items-center justify-center gap-0.5 rounded-md text-xs font-medium text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-mobile-touch flex-col items-center justify-center gap-0.5 rounded-md text-xs font-medium text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 disabled:cursor-not-allowed disabled:opacity-50"
               type="button"
               aria-label={createMemoLabel}
               disabled={!canCreateMemo || isCreating}
@@ -85,13 +95,38 @@ export const MobileBottomNav = ({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="center" side="top" sideOffset={8} className="w-52">
-            <DropdownMenuItem onSelect={() => onCreateMemo()}><FileText className="h-4 w-4" />{t("diagram.normalNote")}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onCreateMemo("mind-map")}><Network className="h-4 w-4" />{t("diagram.mindMap")}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onCreateMemo("flowchart")}><Workflow className="h-4 w-4" />{t("diagram.flowchart")}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onCreateMemo("architecture")}><Boxes className="h-4 w-4" />{t("diagram.architecture")}</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo()}>
+              <FileText className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{t("diagram.normalNote")}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("mind-map")}>
+              <GitFork className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{t("diagram.mindMap")}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("flowchart")}>
+              <Workflow className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{t("diagram.flowchart")}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("architecture")}>
+              <Component className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{t("diagram.architecture")}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("infographic")}>
+              <PieChart className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{t("infographic.name")}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("poster")}>
+        <FileText className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{t("poster.name")}</span>
+        <span className={BETA_BADGE_CLASSNAME}>Beta</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("table")}>
+              <Table2 className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{t("structuredTable.name")}</span>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <MobileBottomNavButton active={activeItem === "settings"} icon={<UserRound className="h-5 w-5" />} label={t("nav.mine")} onClick={onOpenSettings} />
+        <MobileBottomNavButton active={activeItem === "settings"} icon={<UserRound className="h-5 w-5" />} label={t("nav.mine")} notice={deployedUpdateUnseen} onClick={onOpenSettings} />
       </div>
     </nav>
   );
@@ -299,7 +334,6 @@ const MobileNotebookPickerItem = ({
   const { t } = useTranslation();
   const selected = node.id === selectedNotebookId;
   const hasChildren = node.children.length > 0;
-  const hasSelectedDescendant = selectedNotebookId ? notebookTreeContainsId(node.children, selectedNotebookId) : false;
   const expanded = searchActive || expandedNotebookIds.has(node.id);
 
   return (
@@ -309,18 +343,17 @@ const MobileNotebookPickerItem = ({
         className={cn(
           "flex h-12 w-full items-center gap-3 rounded-md px-3 text-left text-sm transition",
           selected
-            ? "bg-slate-100 font-semibold text-slate-950"
-            : hasSelectedDescendant
-              ? "bg-slate-50 text-slate-900 hover:bg-slate-100"
-              : "text-slate-800 hover:bg-slate-50"
+            ? "bg-slate-100 font-semibold text-black dark:text-slate-950"
+            : "text-slate-800 hover:bg-slate-50"
         )}
         style={{ paddingLeft: `${12 + depth * 18}px` }}
       >
         {hasChildren ? (
           <button
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition",
-              searchActive ? "cursor-default" : "hover:bg-slate-100 hover:text-slate-700"
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition",
+              selected ? "text-slate-950" : "text-slate-400",
+              searchActive ? "cursor-default" : selected ? "hover:bg-slate-100" : "hover:bg-slate-100 hover:text-slate-700"
             )}
             type="button"
             disabled={searchActive}

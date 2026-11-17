@@ -53,7 +53,10 @@ body {
 
 .edgeever-html-content h1,
 .edgeever-html-content h2,
-.edgeever-html-content h3 {
+.edgeever-html-content h3,
+.edgeever-html-content h4,
+.edgeever-html-content h5,
+.edgeever-html-content h6 {
   color: #0f172a;
   line-height: 1.25;
 }
@@ -71,6 +74,21 @@ body {
 .edgeever-html-content h3 {
   margin: 1.25rem 0 0.55rem;
   font-size: 1.15rem;
+}
+
+.edgeever-html-content h4 {
+  margin: 1.15rem 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.edgeever-html-content h5 {
+  margin: 1.05rem 0 0.45rem;
+  font-size: 1rem;
+}
+
+.edgeever-html-content h6 {
+  margin: 0.95rem 0 0.4rem;
+  font-size: 0.95rem;
 }
 
 .edgeever-html-content p {
@@ -109,7 +127,7 @@ body {
   width: 1rem;
   height: 1rem;
   margin: 0;
-  accent-color: #16a06e;
+  accent-color: #1a1d21;
 }
 
 .edgeever-html-content ul[data-type="taskList"] li[data-checked] > div {
@@ -124,6 +142,22 @@ body {
 .edgeever-html-content ul[data-type="taskList"] ul[data-type="taskList"] {
   margin: 0.25rem 0 0;
   padding-left: 1.5rem;
+}
+
+.edgeever-html-content details {
+  margin: 0.2em 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.edgeever-html-content summary {
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.edgeever-html-content details > :not(summary) {
+  margin-top: 0.15em;
 }
 
 .edgeever-html-content blockquote {
@@ -184,7 +218,21 @@ body {
   padding: 0;
 }
 
-.edgeever-html-content img,
+.edgeever-html-content img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 80vh;
+  object-fit: contain;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+}
+
 .edgeever-html-mermaid svg {
   display: block;
   width: auto;
@@ -227,6 +275,10 @@ body {
   margin: 0;
   border-radius: 0.5rem;
   object-fit: cover;
+}
+
+.edgeever-html-content [data-edgeever-image-gallery][data-image-gallery-fit="height"] > img {
+  object-fit: contain;
 }
 
 .edgeever-html-mermaid svg {

@@ -3,6 +3,12 @@ import type { TiptapDoc } from "./content";
 
 export const DESKTOP_SIDECAR_PROTOCOL_VERSION = 2;
 
+/** Sidecar-authored memo revision ids. Remote cached revisions use server ids. */
+export const DESKTOP_LOCAL_REVISION_ID_PREFIX = "revision_local_";
+
+export const isDesktopLocalRevisionId = (id: string) =>
+  id.startsWith(DESKTOP_LOCAL_REVISION_ID_PREFIX);
+
 export const DESKTOP_RPC_METHODS = [
   "system.info",
   "storage.health",
@@ -44,6 +50,7 @@ export const DESKTOP_RPC_METHODS = [
   "memo.get",
   "memo.create",
   "memo.update",
+  "memo.updateGuarded",
   "memo.delete",
   "memo.restore",
   "memo.revisions",
@@ -59,7 +66,7 @@ export type DesktopMemoListParams = {
   q?: string;
   tag?: string;
   trash?: boolean;
-  sort?: "updated-desc" | "created-desc" | "title-asc";
+  sort?: "updated-desc" | "created-desc" | "title-asc" | "title-desc";
   filter?: "all" | "pinned" | "tagged" | "untagged";
   limit?: number;
   offset?: number;
@@ -110,6 +117,7 @@ export type DesktopRpcResponses = {
   "memo.get": { memo: MemoDetail };
   "memo.create": { memo: MemoDetail };
   "memo.update": { memo: MemoDetail };
+  "memo.updateGuarded": { memo: MemoDetail };
   "memo.delete": { ok: true };
   "memo.restore": { memo: MemoDetail };
   "memo.revisions": { revisions: import("./types").MemoRevision[] };
@@ -158,7 +166,8 @@ export type DesktopRpcParams = {
   "memo.get": { memoId: string; includeDeleted?: boolean };
   "memo.create": DesktopMemoCreateParams;
   "memo.update": DesktopMemoUpdateParams;
-  "memo.delete": { memoId: string; permanent?: boolean };
+  "memo.updateGuarded": DesktopMemoUpdateParams & { expectedLocalSnapshot: Pick<MemoDetail, "revision" | "contentHash" | "title" | "tags" | "contentMarkdown" | "contentJson"> };
+  "memo.delete": { memoId: string; permanent?: boolean; cancelPendingCreate?: boolean };
   "memo.restore": { memoId: string };
   "memo.revisions": { memoId: string; limit?: number };
   "memo.restoreRevision": { memoId: string; revisionId: string };

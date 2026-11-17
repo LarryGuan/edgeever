@@ -1,3 +1,4 @@
+import { parseChangeIssues, validateResolvedIssues, finishResolvedIssues } from "./release-issues.mjs";
 import {
   createHash,
 } from "node:crypto";
@@ -20,6 +21,7 @@ import {
   assertWindowsUpdateSigningKey,
   signWindowsUpdateManifest,
 } from "./sign-windows-update-manifest.mjs";
+import { syncReadmeContributors } from "./sync-readme-contributors.mjs";
 
 const DEFAULT_REPOSITORY = "tianma-if/edgeever";
 const VERSION_BUMPS = new Set(["patch", "minor", "major"]);
@@ -48,8 +50,11 @@ export const RELEASE_VALIDATIONS = [
       "scripts/check-native-release-assets.test.mjs",
       "scripts/windows-update-metadata.test.mjs",
       "scripts/release.test.mjs",
+      "scripts/release-issues.test.mjs",
+      "scripts/sync-readme-contributors.test.mjs",
       "scripts/validate-store-delivery.test.mjs",
       "scripts/store-delivery.test.mjs",
+      "scripts/xcode-cloud-control.test.mjs",
       "scripts/download-play-universal-apk.test.mjs",
       "scripts/desktop-icns.test.mjs",
       "scripts/verify-desktop-cross-version-startup.test.mjs",
@@ -66,9 +71,11 @@ const usage = `Usage:
     --label bug \\
     --change-en "English user-facing change" \\
     --change-zh "中文用户更新说明" \\
-    --change-commit "abcdef1"
+    --change-locale "ja:日本語のユーザー向け説明" \\
+    --change-commit "abcdef1" \\
+    --change-issue "123:en"
 
-Repeat --change-en, --change-zh, and --change-commit for multiple paired release bullets.
+Repeat --change-en, --change-zh, --change-locale ja:, --change-commit, and --change-issue for multiple paired release bullets.
 Use comma-separated SHAs when one bullet covers multiple commits. Every other
 commit requires --ignore-commit "abcdef1:reason".
 
@@ -79,9 +86,12 @@ Options:
   --label <label>            Required Issue label; may be repeated
   --change-en <text>         Required English release bullet; may be repeated
   --change-zh <text>         Required Chinese release bullet; may be repeated
-  --change-locale <tag:text> Optional localized bullet; repeat once per change and locale
+  --change-locale <tag:text> Required Japanese bullet as ja: or ja-JP:; other locales optional
+  --change-issue <ids>      Required per change: resolved Issue numbers with en/zh language (123:en,456:zh), or none
+  --finish-issues <tag>     Retry Issue follow-up for an already published, audited Release
   --change-commit <sha,...>  Commits covered by the corresponding bilingual bullet
   --ignore-commit <sha:why>  Explicitly exclude a non-user-facing commit; may be repeated
+  --contributor <username>   Credit a contributor to this release; optional, may be repeated
   --install-desktop          Install and launch the final DMG after publication
   --dry-run                  Print the plan and generated notes without mutations
   --help                     Show this help
@@ -97,7 +107,10 @@ export const parseReleaseArgs = (argv) => {
     changesZh: [],
     localizedChanges: [],
     changeCommits: [],
+    changeIssues: [],
+    finishIssues: "",
     ignoredCommits: [],
+    contributors: [],
     installDesktop: false,
     dryRun: false,
     help: false,
@@ -112,7 +125,10 @@ export const parseReleaseArgs = (argv) => {
     ["--change-zh", "changesZh"],
     ["--change-locale", "localizedChanges"],
     ["--change-commit", "changeCommits"],
+    ["--change-issue", "changeIssues"],
+    ["--finish-issues", "finishIssues"],
     ["--ignore-commit", "ignoredCommits"],
+    ["--contributor", "contributors"],
   ]);
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -152,6 +168,13 @@ export const parseReleaseArgs = (argv) => {
   if (!/^[^/\s]+\/[^/\s]+$/.test(options.repository)) {
     throw new Error("--repository must use owner/name format.");
   }
+  if (options.finishIssues) {
+    buildReleaseTitle(options.finishIssues);
+    if (argv.some((arg) => arg.startsWith("--") && !["--finish-issues", "--repository", "--dry-run"].includes(arg))) {
+      throw new Error("--finish-issues only accepts --repository and --dry-run.");
+    }
+    return options;
+  }
   if (!VERSION_BUMPS.has(options.bump)) {
     throw new Error("--bump must be patch, minor, or major.");
   }
@@ -188,8 +211,28 @@ export const parseReleaseArgs = (argv) => {
       throw new Error(`--change-locale ${locale} must provide one translation for every release change.`);
     }
   }
+  if (!localizedChanges.ja && !localizedChanges["ja-JP"]) {
+    throw new Error(
+      "--change-locale ja is required because the App Store listing includes Japanese What's New.",
+    );
+  }
+  options.resolvedIssues = parseChangeIssues(options.changeIssues, options.changesEn.length);
   options.localizedChanges = localizedChanges;
+  options.contributors = normalizeContributors(options.contributors);
   return options;
+};
+
+const normalizeContributors = (contributors) => {
+  const unique = new Map();
+  for (const value of contributors) {
+    const username = value.trim().replace(/^@/, "");
+    if (!/^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i.test(username)) {
+      throw new Error(`Invalid --contributor GitHub username: ${value}`);
+    }
+    const key = username.toLowerCase();
+    if (!unique.has(key)) unique.set(key, username);
+  }
+  return [...unique.values()];
 };
 
 const RELEASE_COMMIT_PATTERN = /^chore: release v\d+\.\d+\.\d+ \[skip ci\]$/;
@@ -306,7 +349,17 @@ export const resolveReleaseVersion = ({
   }
 
   if (draftCandidate.targetCommitish === headSha) {
-    if (packageVersion !== expectedNextVersion) {
+    const expectedParts = expectedNextVersion.split(".").map(Number);
+    const packageParts = packageVersion.split(".").map(Number);
+    const bumpIndex = { major: 0, minor: 1, patch: 2 }[bump];
+    // Replacement Drafts reserve prior failed versions. They remain resumable
+    // when repeated bumps at the explicitly requested level reach this version.
+    const compatibleVersion = packageParts.length === 3 && packageParts.every((part, index) =>
+      Number.isInteger(part) && (index === bumpIndex
+        ? part >= expectedParts[index]
+        : part === expectedParts[index])
+    );
+    if (!compatibleVersion) {
       throw new Error(
         `${draftCandidate.tagName} cannot resume because --bump ${bump} expects v${expectedNextVersion}.`,
       );
@@ -343,7 +396,7 @@ export const buildReleaseTitle = (tag) => {
   return tag;
 };
 
-export const buildIssueBody = ({ changesEn, changesZh, commitCoverageAudit }) => [
+export const buildIssueBody = ({ changesEn, changesZh, commitCoverageAudit, changeIssues = [] }) => [
   "## Summary",
   "",
   ...changesEn.map((change) => `- ${change}`),
@@ -363,6 +416,7 @@ export const buildIssueBody = ({ changesEn, changesZh, commitCoverageAudit }) =>
     ),
     "",
   ] : []),
+  ...(changeIssues.length ? ["## Resolved Issues per change", "", ...changeIssues.map((issues, index) => `- Change ${index + 1}: ${issues}`), ""] : []),
   "## Acceptance criteria",
   "",
   "- Required type checks, Web build, and native release planning tests pass.",
@@ -374,21 +428,25 @@ export const buildReleaseNotes = ({
   changesEn,
   changesZh,
   issueNumber,
+  contributors = [],
+  resolvedIssues = [],
 }) => [
-  "## 🇨🇳 中文说明 / Chinese Changelog",
-  "",
   "## 主要更新",
   "",
   ...changesZh.map((change) => `- ${change}`),
   "",
-  `关联 Issue：#${issueNumber}`,
+  `关联 Issue：${[issueNumber, ...resolvedIssues.map((issue) => issue.number)].map((number) => `#${number}`).join(", ")}`,
   "",
   "## Key Changes",
   "",
   ...changesEn.map((change) => `- ${change}`),
   "",
-  `Related Issue: #${issueNumber}`,
+  `Related Issue: ${[issueNumber, ...resolvedIssues.map((issue) => issue.number)].map((number) => `#${number}`).join(", ")}`,
   "",
+  ...(contributors.length ? [
+    `贡献者 / Contributors：${normalizeContributors(contributors).map((username) => `@${username}`).join(" ")}`,
+    "",
+  ] : []),
 ].join("\n");
 
 export const buildReleaseSummary = ({ version, changesEn, changesZh, localizedChanges = {} }) => ({
@@ -532,7 +590,44 @@ const assertReleasePreconditions = ({ repository, previousTag }) => {
   }
 };
 
-const updateReleaseVersions = ({ nextVersion, desktopRebuild, mobileRebuild, changesEn, changesZh, localizedChanges }) => {
+export const updateIosMarketingVersion = (contents, nextVersion) => {
+  const updated = String(contents).replace(
+    /^MARKETING_VERSION\s*=\s*.+$/m,
+    `MARKETING_VERSION = ${nextVersion}`,
+  );
+  if (!new RegExp(`^MARKETING_VERSION\\s*=\\s*${nextVersion}$`, "m").test(updated)) {
+    throw new Error("Unable to update apps/ios/Config/Version.xcconfig MARKETING_VERSION.");
+  }
+  return updated;
+};
+
+export const updateIosProjectMarketingVersion = (contents, nextVersion) => {
+  const updated = String(contents).replace(
+    /MARKETING_VERSION = [^;]+;/g,
+    `MARKETING_VERSION = ${nextVersion};`,
+  );
+  const matches = updated.match(
+    new RegExp(`MARKETING_VERSION = ${nextVersion.replaceAll(".", "\\.")};`, "g"),
+  );
+  if (!matches || matches.length < 2) {
+    throw new Error(
+      "Unable to update apps/ios/EdgeEver.xcodeproj/project.pbxproj MARKETING_VERSION.",
+    );
+  }
+  return updated;
+};
+
+const updateReleaseVersions = ({
+  repository = DEFAULT_REPOSITORY,
+  contributors = [],
+  nextVersion,
+  desktopRebuild,
+  mobileRebuild,
+  iosRebuild,
+  changesEn,
+  changesZh,
+  localizedChanges,
+}) => {
   const changedPaths = ["package.json", "release-summary.json"];
   const rootPackage = readJson("package.json");
   rootPackage.version = nextVersion;
@@ -543,6 +638,21 @@ const updateReleaseVersions = ({ nextVersion, desktopRebuild, mobileRebuild, cha
     changesZh,
     localizedChanges,
   }));
+
+  try {
+    const { updatedFiles } = syncReadmeContributors({
+      repository,
+      extraLogins: contributors,
+    });
+    if (updatedFiles.length > 0) {
+      changedPaths.push(...updatedFiles);
+      console.log(`[release] synced README contributors (${updatedFiles.join(", ")})`);
+    }
+  } catch (error) {
+    console.warn(
+      `[release] skipping README contributor sync: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   if (desktopRebuild) {
     const desktopPackage = readJson("apps/desktop/package.json");
@@ -557,6 +667,23 @@ const updateReleaseVersions = ({ nextVersion, desktopRebuild, mobileRebuild, cha
     mobileConfig.expo.android.versionCode += 1;
     writeJson("apps/mobile/app.json", mobileConfig);
     changedPaths.push("apps/mobile/app.json");
+  }
+
+  if (iosRebuild) {
+    const iosVersionPath = "apps/ios/Config/Version.xcconfig";
+    const iosProjectPath = "apps/ios/EdgeEver.xcodeproj/project.pbxproj";
+    writeFileSync(
+      iosVersionPath,
+      updateIosMarketingVersion(readFileSync(iosVersionPath, "utf8"), nextVersion),
+    );
+    writeFileSync(
+      iosProjectPath,
+      updateIosProjectMarketingVersion(
+        readFileSync(iosProjectPath, "utf8"),
+        nextVersion,
+      ),
+    );
+    changedPaths.push(iosVersionPath, iosProjectPath);
   }
   return changedPaths;
 };
@@ -639,6 +766,7 @@ const CHECKPOINT_RUN_FIELDS = [
   "dockerRunId",
   "storeRunId",
   "storeRecoveryRunId",
+  "iosStoreRunId",
   "androidPlaySignatureRunId",
   "windowsUpdateAuditRunId",
 ];
@@ -646,6 +774,7 @@ const CANCELLABLE_CHECKPOINT_RUN_FIELDS = new Set([
   "desktopRunId",
   "mobileRunId",
   "dockerRunId",
+  "iosStoreRunId",
   "androidPlaySignatureRunId",
   "windowsUpdateAuditRunId",
 ]);
@@ -671,7 +800,7 @@ export const checkpointRunIds = (checkpoint) => [...new Set([
   ...CHECKPOINT_RUN_FIELDS.map((field) => Number(checkpoint[field])),
 ].filter((runId) => Number.isInteger(runId) && runId > 0))];
 
-export const prepareReleaseCheckpoint = ({ storedState, releaseSha }) => {
+export const prepareReleaseCheckpoint = ({ storedState, releaseSha, preserveIosStoreRun = false }) => {
   if (storedState.releaseSha === releaseSha) return storedState;
   const legacyHistory = CHECKPOINT_RUN_FIELDS.flatMap((field) => {
     const runId = Number(storedState[field]);
@@ -687,6 +816,9 @@ export const prepareReleaseCheckpoint = ({ storedState, releaseSha }) => {
     releaseSha,
     ...(runHistory.length > 0 ? { runHistory } : {}),
     ...(storedState.playDelivery ? { playDelivery: storedState.playDelivery } : {}),
+    ...(preserveIosStoreRun && storedState.iosStoreRunId
+      ? { iosStoreRunId: storedState.iosStoreRunId }
+      : {}),
   };
 };
 
@@ -774,11 +906,12 @@ const viewWorkflowRun = ({ repository, runId }) => ghJson([
   "status,conclusion,url,headSha,jobs",
 ]);
 
-const cancelSupersededCheckpointRuns = ({ repository, checkpoint, headSha }) => {
+const cancelSupersededCheckpointRuns = ({ repository, checkpoint, headSha, preserveIosStoreRun = false }) => {
   const candidates = CHECKPOINT_RUN_FIELDS.flatMap((field) => checkpoint[field]
     ? [{ field, runId: checkpoint[field] }]
     : []).filter(({ field }, index, entries) =>
     CANCELLABLE_CHECKPOINT_RUN_FIELDS.has(field) &&
+    !(preserveIosStoreRun && field === "iosStoreRunId") &&
     entries.findIndex((candidate) => Number(candidate.runId) === Number(entries[index].runId)) === index
   );
   for (const { field, runId } of candidates) {
@@ -917,7 +1050,10 @@ const dispatchStoreDeliveryWorkflow = ({
   repository,
   tag,
   headSha,
-  recoverPlayApk,
+  recoverPlayApk = false,
+  platform = "android",
+  androidTrack = "production",
+  iosBuildNumber = "",
 }) => dispatchReleaseWorkflow({
   repository,
   workflow: RELEASE_WORKFLOWS.storeDelivery,
@@ -925,9 +1061,10 @@ const dispatchStoreDeliveryWorkflow = ({
   headSha,
   inputs: {
     release_tag: tag,
-    platform: "android",
-    android_track: "production",
+    platform,
+    android_track: androidTrack,
     recover_play_apk: recoverPlayApk,
+    ios_build_number: iosBuildNumber,
   },
 });
 
@@ -1039,6 +1176,52 @@ const ensurePlayDelivery = async ({
     recordCompletedDelivery({ storeRunId });
     return storeRunId;
   }
+};
+
+const startIosStoreDelivery = async ({
+  repository,
+  tag,
+  headSha,
+  checkpoint,
+  persistCheckpoint,
+  allowPriorIosRun = false,
+}) => {
+  let iosStoreRunId = checkpoint.iosStoreRunId;
+  if (iosStoreRunId) {
+    const existing = viewWorkflowRun({ repository, runId: iosStoreRunId });
+    if (existing.headSha === headSha || allowPriorIosRun) {
+      if (existing.status !== "completed") {
+        console.log(`[release] reusing App Store delivery: ${existing.url}`);
+        return iosStoreRunId;
+      }
+      if (existing.conclusion === "success") {
+        console.log(`[release] App Store delivery already succeeded: ${existing.url}`);
+        return iosStoreRunId;
+      }
+      console.log(`[release] rerunning failed App Store delivery: ${existing.url}`);
+      run("gh", [
+        "run",
+        "rerun",
+        String(iosStoreRunId),
+        "--repo",
+        repository,
+        "--failed",
+      ]);
+      await waitForRerunStart({ repository, runId: iosStoreRunId });
+      return iosStoreRunId;
+    }
+  }
+
+  iosStoreRunId = await dispatchStoreDeliveryWorkflow({
+    repository,
+    tag,
+    headSha,
+    platform: "ios",
+  });
+  recordCheckpointRun(checkpoint, "iosStoreRunId", iosStoreRunId);
+  persistCheckpoint();
+  console.log("[release] started App Store delivery");
+  return iosStoreRunId;
 };
 
 const requirePlaySignedDraftApk = async ({
@@ -1325,6 +1508,28 @@ export const installReleaseDmg = async ({ repository, tag }) => {
   await installPublishedDmg({ repository, tag, assets: published.assets });
 };
 
+const issueClient = (repository) => ({
+  getIssue: (number) => ghJson(["api", `repos/${repository}/issues/${number}`]),
+  listComments: (number) => ghJson(["api", "--paginate", "--slurp", `repos/${repository}/issues/${number}/comments?per_page=100`]).flat(),
+  comment: (number, body) => run("gh", ["api", "--method", "POST", `repos/${repository}/issues/${number}/comments`, "--raw-field", `body=${body}`], { capture: true }),
+  close: (number) => run("gh", ["api", "--method", "PATCH", `repos/${repository}/issues/${number}`, "--raw-field", "state=closed", "--raw-field", "state_reason=completed"], { capture: true }),
+});
+
+const retryReleaseIssues = (options) => {
+  const release = ghJson(["release", "view", options.finishIssues, "--repo", options.repository, "--json", "tagName,isDraft,isPrerelease,targetCommitish,body,url"]);
+  const issueNumber = Number(release.body.match(/Related Issue: #(\d+)/)?.[1]);
+  if (!issueNumber) throw new Error("Release notes do not identify a tracking Issue.");
+  const { state } = loadReleaseCheckpoint({ repository: options.repository, issueNumber, tag: release.tagName });
+  if (!Array.isArray(state.resolvedIssues)) throw new Error("No saved resolved-Issue plan exists for this Release.");
+  if (options.dryRun) {
+    console.log(JSON.stringify({ tag: release.tagName, resolvedIssues: state.resolvedIssues, auditedSha: state.issueAuditedSha ?? null }));
+    return;
+  }
+  const client = issueClient(options.repository);
+  finishResolvedIssues({ release, auditedSha: state.issueAuditedSha, issues: state.resolvedIssues, client });
+  finishResolvedIssues({ release, auditedSha: state.issueAuditedSha, issues: [{ number: issueNumber, language: "en" }], client });
+};
+
 const releaseMain = async (options) => {
   const latestRelease = ghJson([
     "api",
@@ -1388,12 +1593,16 @@ const releaseMain = async (options) => {
     ignoredCommits: options.ignoredCommits,
   });
   printReleaseCoverageAudit({ audit: commitCoverageAudit, changesEn: options.changesEn });
+  validateResolvedIssues(options.resolvedIssues, issueClient(options.repository).getIssue);
+  console.log(`[release] resolved Issues: ${JSON.stringify(options.resolvedIssues)}`);
   const desktopPlan = planNativeRelease("desktop", changedFiles);
   const mobilePlan = planNativeRelease("mobile", changedFiles);
+  const iosPlan = planNativeRelease("ios", changedFiles);
 
   console.log(`[release] ${releaseBaseTag} -> ${tag}`);
   console.log(`[release] desktop: ${desktopPlan.rebuild ? "rebuild" : "reuse"}`);
   console.log(`[release] Android: ${mobilePlan.rebuild ? "rebuild" : "reuse"}`);
+  console.log(`[release] iOS: ${iosPlan.rebuild ? "rebuild" : "reuse"}`);
 
   if (options.dryRun) {
     console.log(buildReleaseNotes({
@@ -1401,6 +1610,8 @@ const releaseMain = async (options) => {
       changesZh: options.changesZh,
       localizedChanges: options.localizedChanges,
       issueNumber: 0,
+      contributors: options.contributors,
+      resolvedIssues: options.resolvedIssues,
     }));
     return;
   }
@@ -1444,9 +1655,12 @@ const releaseMain = async (options) => {
     console.log(`[release] created Issue #${issueNumber}: ${issueUrl}`);
 
     const versionPaths = updateReleaseVersions({
+      repository: options.repository,
+      contributors: options.contributors,
       nextVersion: releaseVersion,
       desktopRebuild: desktopPlan.rebuild,
       mobileRebuild: mobilePlan.rebuild,
+      iosRebuild: iosPlan.rebuild,
       changesEn: options.changesEn,
       changesZh: options.changesZh,
       localizedChanges: options.localizedChanges,
@@ -1461,6 +1675,8 @@ const releaseMain = async (options) => {
       changesEn: options.changesEn,
       changesZh: options.changesZh,
       issueNumber,
+      contributors: options.contributors,
+      resolvedIssues: options.resolvedIssues,
     });
     const draftUrl = run("gh", [
       "release",
@@ -1484,17 +1700,32 @@ const releaseMain = async (options) => {
     issueNumber,
     tag,
   });
+  if (storedCheckpoint.state.resolvedIssues && JSON.stringify(storedCheckpoint.state.resolvedIssues) !== JSON.stringify(options.resolvedIssues)) {
+    throw new Error("Resolved-Issue plan differs from the saved Draft plan. Resume with the original --change-issue values.");
+  }
   let checkpointCommentId = storedCheckpoint.commentId;
+  const priorReleaseSha = storedCheckpoint.state.releaseSha;
+  const preserveIosStoreRun = Boolean(
+    storedCheckpoint.state.iosStoreRunId &&
+    priorReleaseSha &&
+    priorReleaseSha !== releaseSha &&
+    run("git", ["merge-base", "--is-ancestor", priorReleaseSha, releaseSha], {
+      allowFailure: true,
+    }).status === 0 &&
+    !planNativeRelease("ios", changedFilesBetween(priorReleaseSha, releaseSha)).rebuild
+  );
   if (storedCheckpoint.state.releaseSha && storedCheckpoint.state.releaseSha !== releaseSha) {
     cancelSupersededCheckpointRuns({
       repository: options.repository,
       checkpoint: storedCheckpoint.state,
       headSha: releaseSha,
+      preserveIosStoreRun,
     });
   }
   const checkpoint = prepareReleaseCheckpoint({
     storedState: storedCheckpoint.state,
     releaseSha,
+    preserveIosStoreRun,
   });
   const persistCheckpoint = () => {
     checkpointCommentId = saveReleaseCheckpoint({
@@ -1505,6 +1736,7 @@ const releaseMain = async (options) => {
       state: checkpoint,
     });
   };
+  checkpoint.resolvedIssues = options.resolvedIssues;
   persistCheckpoint();
 
   let playDeliveryAction = "upload";
@@ -1560,6 +1792,17 @@ const releaseMain = async (options) => {
     resolveDraftRun("mobileRunId", RELEASE_WORKFLOWS.mobile, "Draft Android assets"),
     resolveDraftRun("dockerRunId", RELEASE_WORKFLOWS.docker, "Draft Docker image"),
   ]);
+
+  if (iosPlan.rebuild) {
+    await startIosStoreDelivery({
+      repository: options.repository,
+      tag,
+      headSha: releaseSha,
+      checkpoint,
+      persistCheckpoint,
+      allowPriorIosRun: preserveIosStoreRun,
+    });
+  }
 
   const androidReleaseReady = (async () => {
     await waitForRun({
@@ -1735,15 +1978,15 @@ const releaseMain = async (options) => {
     throw error;
   }
 
-  run("gh", [
-    "issue",
-    "comment",
-    String(issueNumber),
-    "--repo",
-    options.repository,
-    "--body",
-    `Released in [${tag}](${releaseUrl}).\n\nRequired local validations, Draft asset and image preparation, and post-publication audits passed.`,
-  ]);
+  checkpoint.issueAuditedSha = releaseSha;
+  persistCheckpoint();
+  finishResolvedIssues({
+    release: ghJson(["release", "view", tag, "--repo", options.repository, "--json", "tagName,url,isDraft,isPrerelease,targetCommitish"]),
+    auditedSha: checkpoint.issueAuditedSha,
+    issues: checkpoint.resolvedIssues,
+    client: issueClient(options.repository),
+  });
+
   const timingStoreRunId =
     checkpoint.storeRecoveryRunId ??
     checkpoint.storeRunId ??
@@ -1791,15 +2034,30 @@ const releaseMain = async (options) => {
   } else {
     console.warn("[release] failed to dispatch the non-blocking endpoint timing report");
   }
-  run("gh", [
-    "issue",
-    "close",
-    String(issueNumber),
-    "--repo",
-    options.repository,
-    "--reason",
-    "completed",
-  ]);
+  finishResolvedIssues({
+    release: ghJson(["release", "view", tag, "--repo", options.repository, "--json", "tagName,url,isDraft,isPrerelease,targetCommitish"]),
+    auditedSha: checkpoint.issueAuditedSha,
+    issues: [{ number: issueNumber, language: "en" }],
+    client: issueClient(options.repository),
+  });
+  console.log(`[release] closed Issue #${issueNumber}`);
+
+  if (iosPlan.rebuild) {
+    try {
+      await waitForRun({
+        repository: options.repository,
+        runId: checkpoint.iosStoreRunId,
+        label: "App Store delivery",
+      });
+    } catch (error) {
+      console.error(
+        `[release] GitHub Release is published and Issue #${issueNumber} is closed; App Store delivery failed and must be retried with bun run publish:stores -- --release `
+        + `${tag} --platform ios`,
+      );
+      throw error;
+    }
+  }
+
   console.log(`[release] ${tag} is complete; Demo deployment is not blocking completion`);
 
   if (options.installDesktop) {
@@ -1815,6 +2073,8 @@ if (import.meta.main) {
     const options = parseReleaseArgs(process.argv.slice(2));
     if (options.help) {
       console.log(usage);
+    } else if (options.finishIssues) {
+      retryReleaseIssues(options);
     } else {
       await releaseMain(options);
     }

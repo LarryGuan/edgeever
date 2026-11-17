@@ -26,10 +26,11 @@ export type DiagramNodeShape =
   | "boundary";
 export type DiagramEdgeKind = "dependency" | "request" | "async" | "data";
 export const DIAGRAM_SELECTABLE_THEMES = [
-  "brand", "cosmos", "dune", "slate", "prism", "sunrise", "marine", "blossom", "mint", "macaron",
+  "plain", "brand", "cosmos", "dune", "slate", "prism", "sunrise", "marine", "blossom", "mint", "macaron",
 ] as const;
+export const DIAGRAM_DEFAULT_THEME = "plain" as const;
 export const DIAGRAM_THEMES = [
-  "brand", "ocean", "ink", "classic", "sky", "sunset", "violet", "rose", "sand", "slate", "aurora", "mono",
+  "plain", "brand", "ocean", "ink", "classic", "sky", "sunset", "violet", "rose", "sand", "slate", "aurora", "mono",
   "sun", "wa", "island", "mint", "cosmos", "tea", "naive", "macaron", "paper",
   "dune", "prism", "sunrise", "marine", "blossom",
 ] as const;
@@ -80,7 +81,9 @@ const THEME_ALIASES: Partial<Record<DiagramTheme, typeof DIAGRAM_SELECTABLE_THEM
 
 export const resolveDiagramTheme = (theme?: DiagramTheme): typeof DIAGRAM_SELECTABLE_THEMES[number] => {
   if (theme && (DIAGRAM_SELECTABLE_THEMES as readonly string[]).includes(theme)) return theme as typeof DIAGRAM_SELECTABLE_THEMES[number];
-  return THEME_ALIASES[theme ?? "brand"] ?? "brand";
+  // A stored legacy id keeps its alias. Only a missing theme uses the plain default.
+  if (theme) return THEME_ALIASES[theme] ?? "brand";
+  return DIAGRAM_DEFAULT_THEME;
 };
 
 export const resolveDiagramStructure = (structure?: DiagramStructure): DiagramStructure => (
@@ -89,7 +92,9 @@ export const resolveDiagramStructure = (structure?: DiagramStructure): DiagramSt
 
 export const ARCHITECTURE_RESOURCE_ICONS = [
   "client", "webApp", "mobileApp", "website", "apiClient",
-  "service", "virtualMachine", "container", "kubernetes", "serverless",
+  "service", "cpu", "gpu", "memory", "virtualMachine", "container", "kubernetes", "serverless",
+  "largeLanguageModel", "multimodalModel", "embeddingModel", "reranker", "modelInference",
+  "vectorDatabase", "ragPipeline", "aiAgent", "modelGateway", "mcpServer",
   "relationalDatabase", "noSqlDatabase", "cache", "dataWarehouse", "searchEngine",
   "objectStorage", "fileStorage", "blockStorage", "backup", "cdn",
   "messageQueue", "eventBus", "streamProcessing", "webhook", "serviceMesh",
@@ -369,7 +374,10 @@ export const diagramDocumentToMermaid = (document: DiagramDocument) => {
     const root = document.nodes.find((node) => node.shape === "topic" && !node.parentId);
     const rootId = root ? nodeIds.get(root.id) : undefined;
     if (rootId) {
-      lines.push("  classDef mindRoot fill:#16A06E,stroke:#12845B,color:#fff,stroke-width:1.5px");
+      const rootStyle = resolveDiagramTheme(document.theme) === "plain"
+        ? "fill:#707070,stroke:#707070,color:#FFFFFF,stroke-width:1.5px"
+        : "fill:#16A06E,stroke:#12845B,color:#fff,stroke-width:1.5px";
+      lines.push(`  classDef mindRoot ${rootStyle}`);
       lines.push(`  class ${rootId} mindRoot`);
     }
   }
@@ -380,20 +388,42 @@ export const diagramDocumentToMermaid = (document: DiagramDocument) => {
 export const serializeDiagramDocument = (document: DiagramDocument) =>
   `${diagramFallbackMarkdown(document)}\n\n<!-- ${DIAGRAM_MARKER}:${encodeBase64Url(JSON.stringify(document))} -->`;
 
-export const createDefaultDiagramDocument = (kind: DiagramKind): DiagramDocument => {
+export type DiagramSeedLabels = {
+  mindMapRoot?: string;
+  mindMapCapture?: string;
+  mindMapOrganize?: string;
+  mindMapShare?: string;
+  mindMapQuickNotes?: string;
+  mindMapSync?: string;
+  mindMapNotebooks?: string;
+  mindMapPublicLinks?: string;
+  flowchartStart?: string;
+  flowchartProcess?: string;
+  flowchartEnd?: string;
+  architectureSystem?: string;
+  architectureClient?: string;
+  architectureApi?: string;
+  architectureDatabase?: string;
+  architectureStorage?: string;
+  architectureQuery?: string;
+  architectureFiles?: string;
+};
+
+export const createDefaultDiagramDocument = (kind: DiagramKind, labels: DiagramSeedLabels = {}): DiagramDocument => {
   if (kind === "mind-map") {
     return {
       schemaVersion: DIAGRAM_SCHEMA_VERSION,
       kind,
+      theme: DIAGRAM_DEFAULT_THEME,
       nodes: [
-        { id: "topic-root", label: "核心主题", x: 72, y: 168, width: 124, height: 46, shape: "topic" },
-        { id: "topic-1", label: "采集想法", x: 268, y: 117, width: 96, height: 36, shape: "topic", parentId: "topic-root" },
-        { id: "topic-2", label: "整理结构", x: 268, y: 201, width: 96, height: 36, shape: "topic", parentId: "topic-root" },
-        { id: "topic-3", label: "输出分享", x: 268, y: 257, width: 96, height: 36, shape: "topic", parentId: "topic-root" },
-        { id: "topic-1-a", label: "快速记录", x: 436, y: 89, width: 96, height: 36, shape: "topic", parentId: "topic-1" },
-        { id: "topic-1-b", label: "跨设备同步", x: 436, y: 145, width: 96, height: 36, shape: "topic", parentId: "topic-1" },
-        { id: "topic-2-a", label: "笔记本", x: 436, y: 201, width: 96, height: 36, shape: "topic", parentId: "topic-2" },
-        { id: "topic-3-a", label: "公开链接", x: 436, y: 257, width: 96, height: 36, shape: "topic", parentId: "topic-3" },
+        { id: "topic-root", label: labels.mindMapRoot ?? "核心主题", x: 72, y: 168, width: 124, height: 46, shape: "topic" },
+        { id: "topic-1", label: labels.mindMapCapture ?? "采集想法", x: 268, y: 117, width: 96, height: 36, shape: "topic", parentId: "topic-root" },
+        { id: "topic-2", label: labels.mindMapOrganize ?? "整理结构", x: 268, y: 201, width: 96, height: 36, shape: "topic", parentId: "topic-root" },
+        { id: "topic-3", label: labels.mindMapShare ?? "输出分享", x: 268, y: 257, width: 96, height: 36, shape: "topic", parentId: "topic-root" },
+        { id: "topic-1-a", label: labels.mindMapQuickNotes ?? "快速记录", x: 436, y: 89, width: 96, height: 36, shape: "topic", parentId: "topic-1" },
+        { id: "topic-1-b", label: labels.mindMapSync ?? "跨设备同步", x: 436, y: 145, width: 96, height: 36, shape: "topic", parentId: "topic-1" },
+        { id: "topic-2-a", label: labels.mindMapNotebooks ?? "笔记本", x: 436, y: 201, width: 96, height: 36, shape: "topic", parentId: "topic-2" },
+        { id: "topic-3-a", label: labels.mindMapPublicLinks ?? "公开链接", x: 436, y: 257, width: 96, height: 36, shape: "topic", parentId: "topic-3" },
       ],
       edges: [
         { id: "branch-1", source: "topic-root", target: "topic-1" },
@@ -411,26 +441,27 @@ export const createDefaultDiagramDocument = (kind: DiagramKind): DiagramDocument
       schemaVersion: ARCHITECTURE_DIAGRAM_SCHEMA_VERSION,
       kind,
       nodes: [
-        { id: "system", label: "应用系统", x: 220, y: 64, width: 590, height: 330, shape: "boundary" },
-        { id: "client", label: "Web 客户端", x: 72, y: 190, width: 150, height: 64, shape: "client" },
-        { id: "api", label: "API 服务", x: 280, y: 190, width: 156, height: 68, shape: "service", parentId: "system" },
-        { id: "database", label: "数据库", x: 540, y: 118, width: 150, height: 64, shape: "database", parentId: "system" },
-        { id: "storage", label: "对象存储", x: 540, y: 268, width: 150, height: 64, shape: "storage", parentId: "system" },
+        { id: "system", label: labels.architectureSystem ?? "应用系统", x: 220, y: 64, width: 590, height: 330, shape: "boundary" },
+        { id: "client", label: labels.architectureClient ?? "Web 客户端", x: 72, y: 190, width: 150, height: 64, shape: "client" },
+        { id: "api", label: labels.architectureApi ?? "API 服务", x: 280, y: 190, width: 156, height: 68, shape: "service", parentId: "system" },
+        { id: "database", label: labels.architectureDatabase ?? "数据库", x: 540, y: 118, width: 150, height: 64, shape: "database", parentId: "system" },
+        { id: "storage", label: labels.architectureStorage ?? "对象存储", x: 540, y: 268, width: 150, height: 64, shape: "storage", parentId: "system" },
       ],
       edges: [
         { id: "request", source: "client", target: "api", label: "HTTPS", kind: "request" },
-        { id: "query", source: "api", target: "database", label: "查询 / 写入", kind: "data" },
-        { id: "objects", source: "api", target: "storage", label: "文件", kind: "data" },
+        { id: "query", source: "api", target: "database", label: labels.architectureQuery ?? "查询 / 写入", kind: "data" },
+        { id: "objects", source: "api", target: "storage", label: labels.architectureFiles ?? "文件", kind: "data" },
       ],
     };
   }
   return {
     schemaVersion: DIAGRAM_SCHEMA_VERSION,
     kind,
+    theme: DIAGRAM_DEFAULT_THEME,
     nodes: [
-      { id: "flow-start", label: "开始", x: 98, y: 48, width: 140, height: 44, shape: "terminator" },
-      { id: "flow-process", label: "处理步骤", x: 80, y: 140, width: 176, height: 56, shape: "process" },
-      { id: "flow-end", label: "结束", x: 98, y: 244, width: 140, height: 44, shape: "terminator" },
+      { id: "flow-start", label: labels.flowchartStart ?? "开始", x: 98, y: 48, width: 140, height: 44, shape: "terminator" },
+      { id: "flow-process", label: labels.flowchartProcess ?? "处理步骤", x: 80, y: 140, width: 176, height: 56, shape: "process" },
+      { id: "flow-end", label: labels.flowchartEnd ?? "结束", x: 98, y: 244, width: 140, height: 44, shape: "terminator" },
     ],
     edges: [
       { id: "flow-edge-1", source: "flow-start", target: "flow-process" },

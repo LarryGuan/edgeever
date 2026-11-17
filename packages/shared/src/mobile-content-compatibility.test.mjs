@@ -86,6 +86,27 @@ describe("native editor unknown-content compatibility", () => {
       .toEqual(galleryDocument);
   });
 
+  test("keeps empty links visible and serializable in native editors", () => {
+    const document = {
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        content: [{ type: "edgeeverEmptyExternalLink", attrs: { href: "https://example.com", title: null } }],
+      }],
+    };
+    expect(prepareNativeEditorContent(document)).toEqual(document);
+    expect(docToMarkdown(document)).toBe("[](https://example.com)");
+  });
+
+  test("labels placeholders in the requested UI locale and defaults to English", () => {
+    const labelFor = (locale) => prepareNativeEditorContent(futureDocument, locale).content[0]?.attrs?.displayLabel;
+    expect(labelFor("en-US")).toBe("Unsupported content: edgeeverThemeBlock");
+    expect(labelFor("ja")).toBe("未対応のコンテンツ: edgeeverThemeBlock");
+    expect(labelFor("pl")).toBe("Nieobsługiwana zawartość: edgeeverThemeBlock");
+    expect(labelFor("ru")).toBe("Неподдерживаемое содержимое: edgeeverThemeBlock");
+    expect(labelFor(undefined)).toBe("Unsupported content: edgeeverThemeBlock");
+  });
+
   test("keeps Markdown generation alive by projecting unknown content to text", () => {
     const markdown = docToMarkdown(futureDocument);
     expect(markdown).toContain("保留主题块正文");

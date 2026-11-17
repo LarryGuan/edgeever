@@ -3,7 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { bodyLimit } from 'hono/body-limit';
 import type { Hono } from 'hono';
 import type { AppEnv, Bindings } from './api-context';
-import { getAiSettings, loadDefaultAiModel, resolvePrimaryAiCredentialEncryptionKey } from './ai-service';
+import { getAiSettings, loadDefaultAiModelCredentials, resolvePrimaryAiCredentialEncryptionKey } from './ai-service';
 import { apiError } from './http-errors';
 import { getWorkspaceId, requireUser } from './request-auth';
 import { PUBLIC_NETWORK_TIMEOUT_MS, publicRequestHeaders, publicResponseHeaders, readPublicBody, validatePublicUrl } from './public-network-policy';
@@ -12,6 +12,7 @@ export function registerPluginCapabilityRoutes(app: Hono<AppEnv>, dependencies: 
   isDemoMode: (env: Bindings) => boolean;
   aiStatus?: () => Promise<PluginAiStatus>;
   generate?: (input: PluginAiGenerateRequest, signal: AbortSignal) => Promise<{ text: string }>;
+  loadCredentials?: typeof loadDefaultAiModelCredentials;
 }) {
   // Per app instance concurrency guard, not a cross-instance usage quota.
   const active = new Map<string, number>();
@@ -27,25 +28,27 @@ export function registerPluginCapabilityRoutes(app: Hono<AppEnv>, dependencies: 
       try { await next(); } finally { const left = (active.get(key) ?? 1) - 1; if (left) active.set(key, left); else active.delete(key); }
     });
   }
+  app.post('/api/v1/plugins/ai/generate/prepare', zValidator('json', PluginAiGenerateSchema), async c => {
+    try {
+      const input = c.req.valid('json');
+      const loadCredentials = dependencies.loadCredentials ?? loadDefaultAiModelCredentials;
+      const credentials = await loadCredentials(c.env.storage?.db, getWorkspaceId(c), c.env);
+      return c.json({
+        ...credentials,
+        system: input.system,
+        prompt: input.prompt,
+        maxOutputTokens: input.maxOutputTokens ?? 3000,
+      });
+    } catch { return apiError(c, 'plugin_ai_failed', 'AI generation failed or timed out. Check the default AI model configuration.', 502); }
+  });
   app.get('/api/v1/plugins/ai/status', async c => {
     if (dependencies.aiStatus) return c.json(await dependencies.aiStatus());
-    const settings = await getAiSettings(c.env.storage.db, getWorkspaceId(c), Boolean(resolvePrimaryAiCredentialEncryptionKey(c.env)), false, undefined, c.env);
+    const settings = await getAiSettings(c.env.storage.db, getWorkspaceId(c), Boolean(resolvePrimaryAiCredentialEncryptionKey(c.env)), false, c.env);
     const provider = settings.providers.find(p => p.isEnabled && p.models.some(m => m.id === settings.defaultModelId));
     const model = provider?.models.find(m => m.id === settings.defaultModelId);
     return c.json({ configured: Boolean(model), ...(model ? { modelName: model.displayName } : {}) });
   });
-  app.post('/api/v1/plugins/ai/generate', zValidator('json', PluginAiGenerateSchema), async c => {
-    try {
-      const input = c.req.valid('json');
-      const signal = AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(120_000)]);
-      if (dependencies.generate) return c.json(await dependencies.generate(input, signal));
-      const model = await loadDefaultAiModel(c.env.storage.db, getWorkspaceId(c), c.env);
-      // Keep provider SDKs out of startup and non-AI plugin requests.
-      const { generateAiText } = await import('./ai-runtime');
-      const output = await generateAiText({ model, system: input.system, prompt: input.prompt, maxOutputTokens: input.maxOutputTokens ?? 3000, abortSignal: signal });
-      return c.json({ text: output.text });
-    } catch { return apiError(c, 'plugin_ai_failed', 'AI generation failed or timed out. Check the default AI model configuration.', 502); }
-  });
+  app.post('/api/v1/plugins/ai/generate', c => apiError(c, 'ai_client_required', 'Update the client to call the model directly.', 410));
   app.post('/api/v1/plugins/network/fetch', zValidator('json', PluginPublicFetchSchema), async c => {
     const input = c.req.valid('json');
     let url: URL; let headers: Record<string, string>;

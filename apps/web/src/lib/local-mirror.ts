@@ -1,4 +1,6 @@
+import { clearAiBodyDraftScope } from "./ai-body-draft-store";
 import {
+  DEFAULT_MEMO_TITLE,
   createExcerpt,
   docToMarkdown,
   docToText,
@@ -7,6 +9,10 @@ import {
   markdownToDoc,
   mergeMemoDocs,
   getDiagramSummary,
+  getInfographicSummary,
+  getPosterSummary,
+  getTableSummary,
+  getNotebookDescendantIds,
   resolveMemoContentDoc,
   resolveMergedMemoTitle,
   type MemoDetail,
@@ -23,12 +29,16 @@ import type { MemoFilterMode, MemoSortMode } from "@/lib/app-helpers";
 import { api, type SyncChangesResponse } from "@/lib/api";
 import { localDb, selectNewestLocalDraft, type LocalDraft, type LocalMemo, type LocalNotebook, type LocalResource, type LocalRevision } from "@/lib/local-db";
 import { cacheLocalResourceBytes, localResourceUrl, removeCachedLocalResourceBytes } from "@/lib/local-resource-cache";
+import { NotebookNotEmptyError, notebooksBlockedByPendingDeletes } from "@/lib/notebook-delete";
 import { isBrowserOffline } from "@/lib/network-status";
 import { parseTagsText } from "@/lib/utils";
 import { createClientUuid } from "@/lib/client-id";
 
 export type LocalMemoListParams = {
   notebookId?: string | null;
+  includeTotal?: boolean;
+  /** Remote continuation token; local mirrors use offset instead. */
+  cursor?: string | null;
   notebookIds?: string[];
   q?: string;
   tag?: string;
@@ -41,7 +51,7 @@ export type LocalMemoListParams = {
 
 export type LocalMemoListResponse = {
   memos: MemoSummary[];
-  totalCount: number;
+  totalCount?: number;
   nextCursor: string | null;
 };
 
@@ -75,6 +85,9 @@ const toSummary = (memo: MemoDetail): MemoSummary => ({
   title: memo.title,
   excerpt: memo.excerpt,
   ...getDiagramSummary(memo.contentMarkdown),
+  ...getInfographicSummary(memo.contentMarkdown),
+  ...getPosterSummary(memo.contentMarkdown),
+  ...getTableSummary(memo.contentMarkdown),
   tags: memo.tags,
   isPinned: memo.isPinned,
   isArchived: memo.isArchived,
@@ -249,14 +262,18 @@ export const listLocalMemos = async (scope: string, params: LocalMemoListParams)
     if (params.filter === "tagged" && memo.tags.length === 0) return false;
     if (params.filter === "untagged" && memo.tags.length > 0) return false;
     if (params.filter === "pinned" && !memo.isPinned) return false;
-    if (q && ![memo.title, memo.excerpt, memo.contentText, memo.tags.join(" ")].some((value) => value?.toLocaleLowerCase().includes(q))) return false;
+    if (q && ![memo.title || DEFAULT_MEMO_TITLE, memo.excerpt, memo.contentText, memo.tags.join(" ")].some((value) => value?.toLocaleLowerCase().includes(q))) return false;
     return true;
   });
 
   memos.sort((left, right) => {
     if (params.trash) return (right.deletedAt ?? "").localeCompare(left.deletedAt ?? "") || right.id.localeCompare(left.id);
     if (params.sort === "created-desc") return right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id);
-    if (params.sort === "title-asc") return (left.title || left.excerpt).localeCompare(right.title || right.excerpt, "zh-CN") || right.updatedAt.localeCompare(left.updatedAt);
+    if (params.sort === "title-asc" || params.sort === "title-desc") {
+      const titleCompare = (left.title || left.excerpt).localeCompare(right.title || right.excerpt, "zh-CN");
+      if (titleCompare !== 0) return params.sort === "title-desc" ? -titleCompare : titleCompare;
+      return right.updatedAt.localeCompare(left.updatedAt);
+    }
     return Number(right.isPinned) - Number(left.isPinned) || right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id);
   });
 
@@ -265,7 +282,7 @@ export const listLocalMemos = async (scope: string, params: LocalMemoListParams)
   const page = memos.slice(offset, offset + (params.limit ?? 50));
   return {
     memos: page.map(toSummary),
-    totalCount,
+    ...(params.includeTotal === false ? {} : { totalCount }),
     nextCursor: offset + page.length < totalCount ? String(offset + page.length) : null,
   };
 };
@@ -541,7 +558,7 @@ export const getLocalNotebook = async (scope: string, notebookId: string) => {
   return result;
 };
 
-export const updateLocalNotebook = async (scope: string, notebookId: string, input: Partial<Pick<Notebook, "name" | "parentId" | "sortOrder">>) => {
+export const updateLocalNotebook = async (scope: string, notebookId: string, input: Partial<Pick<Notebook, "name" | "parentId" | "sortOrder" | "icon" | "color" | "textColor" | "colorTarget" | "isBold" | "iconInverted" | "rowInverted">>) => {
   const notebook = await getLocalNotebook(scope, notebookId);
   if (!notebook) return null;
   const updated = { ...notebook, ...input, updatedAt: new Date().toISOString() };
@@ -554,6 +571,86 @@ export const deleteLocalNotebook = async (scope: string, notebookId: string) => 
   if (!notebook) return false;
   await localDb.notebooks.delete([scope, notebookId]);
   return true;
+};
+
+const isProtectedInboxNotebook = (notebook: Pick<Notebook, "id" | "slug">) =>
+  notebook.slug === "inbox" || notebook.id === "nb_inbox" || notebook.id.endsWith("_inbox");
+
+// Removes the notebook and its empty descendants. Ids are leaves-first so a
+// server that still deletes one notebook at a time can apply them in order.
+export const deleteLocalNotebookTree = async (scope: string, notebookId: string) => {
+  const { notebooks } = await listLocalNotebooks(scope);
+  const ids = getNotebookDescendantIds(notebooks, notebookId);
+  const idSet = new Set(ids);
+  const selected = notebooks.filter((notebook) => idSet.has(notebook.id));
+  if (selected.length === 0) return [notebookId];
+  if (selected.some((notebook) => notebook.memoCount > 0)) throw new NotebookNotEmptyError();
+  if (selected.some((notebook) => isProtectedInboxNotebook(notebook))) throw new Error("inbox_not_deletable");
+  await Promise.all(selected.map((notebook) => localDb.notebooks.delete([scope, notebook.id])));
+  return [...ids].reverse();
+};
+
+export const readNotebookSyncGuards = async (scope: string) => {
+  const items = (await localDb.syncQueue.where("status").anyOf("pending", "syncing", "error").toArray())
+    .filter((item) => item.scope === scope);
+  const pendingDeleteIds = new Set<string>();
+  const pendingCreateIds = new Set<string>();
+  const pendingUpdateIds = new Set<string>();
+  for (const item of items) {
+    if (item.kind === "notebook.update") pendingUpdateIds.add(item.memoId);
+    if (item.kind === "notebook.create") {
+      pendingCreateIds.add(item.memoId);
+      const temporaryId = (item.payload as { temporaryId?: unknown }).temporaryId;
+      if (typeof temporaryId === "string" && temporaryId.length > 0) pendingCreateIds.add(temporaryId);
+    }
+    if (item.kind !== "notebook.delete" || (item.status !== "pending" && item.status !== "syncing")) continue;
+    const payload = item.payload as { notebookId?: unknown; notebookIds?: unknown };
+    if (typeof payload.notebookId === "string") pendingDeleteIds.add(payload.notebookId);
+    if (Array.isArray(payload.notebookIds)) {
+      for (const id of payload.notebookIds) {
+        if (typeof id === "string" && id.length > 0) pendingDeleteIds.add(id);
+      }
+    }
+    if (item.memoId) pendingDeleteIds.add(item.memoId);
+  }
+  return { pendingDeleteIds, pendingCreateIds, pendingUpdateIds };
+};
+
+export const reconcileLocalNotebooks = async (
+  scope: string,
+  remoteNotebooks: Notebook[],
+  pendingDeleteIds: ReadonlySet<string>,
+  pendingCreateIds: ReadonlySet<string>,
+  pendingUpdateIds: ReadonlySet<string>,
+) => {
+  const blocked = notebooksBlockedByPendingDeletes(remoteNotebooks, pendingDeleteIds);
+  const remoteIds = new Set(remoteNotebooks.map((notebook) => notebook.id));
+  const keep = (notebook: { id: string }) => {
+    if (pendingDeleteIds.has(notebook.id) || blocked.has(notebook.id)) return false;
+    if (remoteIds.has(notebook.id)) return true;
+    return pendingCreateIds.has(notebook.id) || notebook.id.startsWith("local_");
+  };
+
+  return localDb.transaction("rw", localDb.notebooks, async () => {
+    const local = await localDb.notebooks.where("scope").equals(scope).toArray();
+    const localById = new Map(local.map((notebook) => [notebook.id, notebook]));
+    let changed = false;
+    for (const notebook of local) {
+      if (keep(notebook)) continue;
+      await localDb.notebooks.delete([scope, notebook.id]);
+      changed = true;
+    }
+    for (const notebook of remoteNotebooks) {
+      if (!keep(notebook)) continue;
+      const current = localById.get(notebook.id);
+      const incoming = { ...notebook, scope };
+      if (current && (pendingUpdateIds.has(notebook.id)
+        || (Object.keys({ ...current, ...incoming }) as (keyof LocalNotebook)[]).every((key) => current[key] === incoming[key]))) continue;
+      await localDb.notebooks.put(incoming);
+      changed = true;
+    }
+    return changed;
+  });
 };
 
 export const createLocalNotebook = async (scope: string, input: { name: string; parentId?: string | null }) => {
@@ -644,11 +741,13 @@ export const listLocalTags = async (scope: string): Promise<{ tags: TagSummary[]
 
 const updateLocalMemos = async (scope: string, memoIds: string[], update: (memo: MemoDetail) => MemoDetail | null) => {
   const wanted = new Set(memoIds);
+  if (wanted.size === 0) return 0;
+
   let updated = 0;
   await localDb.transaction("rw", localDb.memos, async () => {
     const memos = await localDb.memos.where("scope").equals(scope).toArray();
     for (const stored of memos) {
-      if (wanted.size > 0 && !wanted.has(stored.id)) continue;
+      if (!wanted.has(stored.id)) continue;
       const { scope: _scope, ...memo } = stored;
       const next = update(memo);
       if (!next) {
@@ -775,6 +874,8 @@ export const clearLocalScope = async (scope: string) => {
   await Promise.all(scopedResources
     .filter((resource) => resource.id.startsWith("local_resource_"))
     .map((resource) => removeCachedLocalResourceBytes(resource.url)));
+  // Unapplied AI body drafts live in their own database (#652 PR B).
+  await clearAiBodyDraftScope(scope);
 };
 
 export type { LocalMemo, LocalNotebook };

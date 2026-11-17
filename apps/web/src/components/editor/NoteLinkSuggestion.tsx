@@ -82,7 +82,7 @@ export const NoteLinkSuggestion = forwardRef<NoteLinkSuggestionHandle, NoteLinkS
                 onMouseDown={(event) => event.preventDefault()}
                 onSelect={() => command(item)}
               >
-                <Link2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                <Link2 className="h-4 w-4 shrink-0 text-slate-600" />
                 <span className="min-w-0 flex-1 truncate">{item.title || labels.untitled}</span>
                 <span className="max-w-40 truncate text-xs text-slate-400">{item.excerpt}</span>
               </CommandItem>
@@ -147,7 +147,13 @@ export const createNoteLinkSuggestionExtension = ({
       decorationClass: "edgeever-note-link-query",
       allow: ({ state, range }) => {
         const position = state.doc.resolve(range.from);
-        return this.editor.isEditable && position.parent.type.name === "paragraph";
+        // Check the paragraph boundary, since formatting can split a word into text nodes.
+        const prefix = position.parent.textBetween(
+          Math.max(0, position.parentOffset - 1), position.parentOffset, "\n",
+          (node) => node.type.name === "hardBreak" ? "\n" : "\ufffc",
+        );
+        return this.editor.isEditable && position.parent.type.name === "paragraph"
+          && (position.parentOffset === 0 || /\s/u.test(prefix));
       },
       items: async ({ query }) => {
         const currentMemoId = getCurrentMemoId();

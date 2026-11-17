@@ -8,9 +8,18 @@ import { bootstrapI18n } from "./i18n";
 import { emitPwaUpdateNotice } from "./lib/pwa-update-notice";
 import { withEnvironmentTitlePrefix } from "./lib/environment-title";
 import { initializeTheme, ThemeProvider } from "./components/ThemeProvider";
+import { installPhoneImageFillStyle } from "@edgeever/shared/image-display";
+import { installDesktopClipboardBridge } from "./lib/clipboard";
+import { applyEditorBodyFontPreference } from "./lib/editor-body-font";
+import { installEditorBodyFontFaces } from "./lib/editor-body-font-faces";
+import { applyUiFontPreference } from "./lib/ui-font";
 import { DesktopRendererErrorBoundary } from "./components/DesktopRendererErrorBoundary";
 import { reportDesktopRendererReadyAfterPaint } from "./lib/desktop-renderer-ready";
 import "./styles/globals.css";
+import "./styles/editor-body-fonts.css";
+
+installPhoneImageFillStyle();
+installDesktopClipboardBridge();
 
 const PWA_UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1_000;
 const DEVELOPMENT_PWA_RELOAD_KEY = "edgeever.dev-pwa-reset";
@@ -113,6 +122,10 @@ const mountApp = () => {
   }
 
   initializeTheme();
+  installDesktopClipboardBridge();
+  installEditorBodyFontFaces();
+  applyEditorBodyFontPreference();
+  applyUiFontPreference();
   const Router = isDesktopRenderer ? HashRouter : BrowserRouter;
 
   createRoot(root, {

@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { globSync, readFileSync } from "node:fs";
+import { createPosterDocument, serializePosterDocument, parsePosterDocument, markdownToDoc, addTableField, createDefaultTableDocument, serializeTableDocument, updateTableCell } from "@edgeever/shared";
 import {
   acquireMaintenanceLease,
   createMemoEditSession,
@@ -136,6 +137,26 @@ describe("database write optimizations", () => {
     sqlite.close();
   });
 
+  test("persists literal tilde ranges through Markdown and JSON updates (#698)", async () => {
+    const { database, sqlite } = createDatabase();
+    try {
+      const memo = getSeedMemo(sqlite);
+      const actor = { actorType: "user", actorId: "user_owner" };
+      const source = "成本 1~2~3 元，10~20, 30~40";
+      const first = await updateMemoRecord(database, memo.workspace_id, memo.id,
+        { contentMarkdown: source }, actor, "owner");
+      expect(first.memo.contentJson.content[0].content).toEqual([{ type: "text", text: source }]);
+      const second = await updateMemoRecord(database, memo.workspace_id, memo.id,
+        { contentJson: first.memo.contentJson }, actor, "owner");
+      const stored = sqlite.query("SELECT content_json, content_markdown FROM memo_contents WHERE memo_id = ?").get(memo.id);
+      expect(JSON.parse(stored.content_json)).toEqual(first.memo.contentJson);
+      expect(markdownToDoc(stored.content_markdown)).toEqual(first.memo.contentJson);
+      expect(second.memo.contentJson).toEqual(first.memo.contentJson);
+    } finally {
+      sqlite.close();
+    }
+  });
+
   test("returns an unchanged memo without revision, audit, or search writes", async () => {
     const { database, sqlite } = createDatabase();
     const memo = getSeedMemo(sqlite);
@@ -158,6 +179,70 @@ describe("database write optimizations", () => {
     expect(sqlite.query(
       "SELECT id, title, content_text, tags FROM memo_search_documents WHERE memo_id = ?",
     ).get(memo.id)).toEqual(searchRow);
+    sqlite.close();
+  });
+
+  test("keeps a structured table intact and retires an attachment removed from it", async () => {
+    const { database, sqlite } = createDatabase();
+    const memo = getSeedMemo(sqlite);
+    let document = addTableField(createDefaultTableDocument(), { id: "fld_files", name: "附件", type: "attachment" });
+    document = updateTableCell(document, "rec_sample", "fld_files", [{
+      resourceId: "res_table_file",
+      filename: "brief.pdf",
+      mimeType: "application/pdf",
+      byteSize: 12,
+    }]);
+    sqlite.query(
+      `INSERT INTO resources (id, memo_id, object_key, kind, mime_type, filename, byte_size)
+       VALUES ('res_table_file', ?, 'workspaces/test/brief.pdf', 'attachment', 'application/pdf', 'brief.pdf', 12)`,
+    ).run(memo.id);
+    const actor = { actorType: "user", actorId: "user_owner" };
+    const saved = await updateMemoRecord(
+      database,
+      memo.workspace_id,
+      memo.id,
+      { contentMarkdown: serializeTableDocument(document) },
+      actor,
+      "owner",
+    );
+    expect(saved.memo.contentMarkdown).toContain("edgeever-table-v1");
+
+    const replaced = await updateMemoRecord(
+      database,
+      memo.workspace_id,
+      memo.id,
+      { contentMarkdown: "普通笔记" },
+      actor,
+      "owner",
+    );
+    expect(replaced.error).toBe("table_update_required");
+    expect(sqlite.query("SELECT content_markdown FROM memo_contents WHERE memo_id = ?").get(memo.id).content_markdown).toContain("edgeever-table-v1");
+
+    const removed = await updateMemoRecord(
+      database,
+      memo.workspace_id,
+      memo.id,
+      { contentMarkdown: serializeTableDocument(updateTableCell(document, "rec_sample", "fld_files", [])) },
+      actor,
+      "owner",
+    );
+    expect(removed.releasedResources?.map((resource) => resource.id)).toEqual(["res_table_file"]);
+    expect(sqlite.query("SELECT is_deleted FROM resources WHERE id = 'res_table_file'").get().is_deleted).toBe(1);
+    sqlite.close();
+  });
+
+  test("protects new poster source from legacy contentJson edits and stale revisions", async () => {
+    const { database, sqlite } = createDatabase();
+    const memo = getSeedMemo(sqlite), actor = { actorType: "user", actorId: "user_owner" };
+    const first = await updateMemoRecord(database, memo.workspace_id, memo.id, { contentMarkdown: serializePosterDocument(createPosterDocument("Poster")) }, actor, "owner");
+    expect(parsePosterDocument(first.memo.contentMarkdown)).not.toBeNull();
+    const legacy = await updateMemoRecord(database, memo.workspace_id, memo.id, { contentJson: markdownToDoc("legacy editor changed preview") }, actor, "owner");
+    expect(legacy.error).toBe("poster_update_required");
+    const next = await updateMemoRecord(database, memo.workspace_id, memo.id, { expectedRevision: first.memo.revision, expectedContentHash: first.memo.contentHash, contentMarkdown: serializePosterDocument(createPosterDocument("New design")) }, actor, "owner");
+    expect(parsePosterDocument(next.memo.contentMarkdown).elements[1].text).toBe("New design");
+    const stale = await updateMemoRecord(database, memo.workspace_id, memo.id, { expectedRevision: first.memo.revision, expectedContentHash: first.memo.contentHash, contentMarkdown: first.memo.contentMarkdown }, actor, "owner");
+    expect(stale.error).toBeTruthy();
+    expect(parsePosterDocument(sqlite.query("SELECT content_markdown FROM memo_contents WHERE memo_id = ?").get(memo.id).content_markdown).elements[1].text).toBe("New design");
     sqlite.close();
   });
 

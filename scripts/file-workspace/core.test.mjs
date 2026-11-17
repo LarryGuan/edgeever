@@ -180,7 +180,12 @@ test('conflict at API write after session is detected; no accidental local overw
 
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=','base64');
 const pdf=Buffer.from('%PDF-1.4\nattachment test\n%%EOF');
-const resourceCount=()=>sqlite.query('SELECT count(*) n FROM resources').get().n;
+const resourceCount=()=>sqlite.query(`
+  SELECT count(*) n
+  FROM resources r
+  INNER JOIN memos m ON m.id = r.memo_id
+  WHERE m.notebook_id IN ('nb_parent', 'nb_child', 'nb_private', 'nb_other')
+`).get().n;
 const fileFor=async memo=>(await state()).entries[memo.id].path;
 const refFile=(notePath,url)=>join(root,join(notePath,'..',decodeURIComponent(url.split('#')[0])));
 

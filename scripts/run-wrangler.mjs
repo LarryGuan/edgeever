@@ -10,6 +10,7 @@ import {
 import { dirname, resolve } from "node:path";
 import {
   buildLocalDevEnvironmentFile,
+  configureDemoAssetRouting,
   deployedWorkerSettings,
   DEPLOYMENT_TARGETS_PATH,
   findD1DatabaseIdByName,
@@ -19,6 +20,7 @@ import {
   PLACEHOLDER_D1_ID,
   productionVersionIds,
   repositoryWranglerConfigError,
+  resolveWranglerAssetsDirectory,
   runWranglerSync,
   shouldCaptureDeploymentTargets,
 } from "./wrangler-runner.mjs";
@@ -166,8 +168,9 @@ const envValue = (name) => {
 const isRemoteCommand =
   wranglerArgs.includes("deploy") || wranglerArgs.includes("--remote");
 const isDeployCommand = wranglerArgs.includes("deploy");
-const isRemoteDevCommand = wranglerArgs.includes("dev") && wranglerArgs.includes("--remote");
-const isLocalDevCommand = wranglerArgs.includes("dev") && wranglerArgs.includes("--local");
+const isDevCommand = wranglerArgs.includes("dev");
+const isRemoteDevCommand = isDevCommand && wranglerArgs.includes("--remote");
+const isLocalDevCommand = isDevCommand && wranglerArgs.includes("--local");
 // Any --local command rewrites .wrangler.generated.toml. Keep local-only vars
 // (especially auth-free access) so `d1 migrations apply --local` cannot strip
 // them and leave a later wrangler reload requiring login mid-session.
@@ -335,6 +338,7 @@ const runtimeVars = {
   // Persistent local development uses real sessions. Only the isolated local
   // demo stays auth-free; remote deployments always fail closed.
   EDGE_EVER_ALLOW_UNAUTHENTICATED: isLocalCommand ? String(envValue("LOCAL_DEMO_SEED") === "true") : undefined,
+  EDGE_EVER_COMMUNITY_REGISTRY_URL: envValue("COMMUNITY_REGISTRY_URL"),
 };
 const runtimeVarLines = Object.entries(runtimeVars)
   .filter(([, value]) => Boolean(value))
@@ -358,6 +362,8 @@ const localDemoSeed = envValue("LOCAL_DEMO_SEED")?.toLowerCase();
 if (localDemoSeed && !["true", "false"].includes(localDemoSeed)) {
   throw new Error("EDGE_EVER_LOCAL_DEMO_SEED must be true or false.");
 }
+
+config = configureDemoAssetRouting(config, demoMode === "true");
 
 if (demoMode === "true") {
   // Default: daily 19:00 UTC = 03:00 China Standard Time (UTC+8).
@@ -440,6 +446,12 @@ if (isDeployCommand && Object.keys(authSecrets).length === 0 && !useExistingAuth
 
 if (isDeployCommand && Object.keys(authSecrets).length === 0 && useExistingAuthSecret) {
   writeWranglerNotice("info", "using the authentication Secret provisioned by Cloudflare");
+}
+
+if (isDevCommand) {
+  // Local dev serves the web app from Vite, so an empty assets directory is enough.
+  const assetsDirectory = resolveWranglerAssetsDirectory(config, dirname(configPath));
+  if (assetsDirectory) mkdirSync(assetsDirectory, { recursive: true });
 }
 
 if (isLocalDevCommand && !hasEnvFileArg) {

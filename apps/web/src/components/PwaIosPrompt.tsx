@@ -15,11 +15,11 @@ export const PwaIosPrompt = () => {
     <div className="fixed bottom-6 left-4 right-4 z-50 mx-auto max-w-md animate-in fade-in slide-in-from-bottom-5 duration-300">
       <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-card/95 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
         {/* Decorative top accent line */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-slate-900" />
         
         <button
           onClick={dismissIOSPrompt}
-          className="absolute right-2 top-2 rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          className="absolute right-2 top-2 rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
           aria-label={t("common.close") || "Close"}
         >
           <X className="h-4 w-4" />
@@ -38,7 +38,7 @@ export const PwaIosPrompt = () => {
               {t("pwa.iosPrompt.title") || "将 EdgeEver 安装到主屏幕"}
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-normal">
-              {t("pwa.iosPrompt.subtitle") || "享受全屏独立窗口，体验如原生 App 般丝滑的印象笔记。"}
+              {t("pwa.iosPrompt.subtitle") || "享受全屏独立窗口，体验如原生 App 般丝滑的笔记与知识库工作区。"}
             </p>
             
             <div className="mt-3.5 flex flex-col gap-2 rounded-lg bg-slate-50 p-2.5 text-xs text-slate-600">

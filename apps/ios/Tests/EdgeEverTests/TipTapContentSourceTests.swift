@@ -13,6 +13,38 @@ final class TipTapContentSourceTests: XCTestCase {
         XCTAssertTrue(decision.payload.contains("edgeever-diagram-v1"))
     }
 
+    func testViewerStripsStructuredTableMarker() {
+        let markdown = "| 名称 |\n| --- |\n| 示例 |\n\n<!-- edgeever-table-v1:abc -->"
+        let decision = TipTapContentSource.resolve(
+            mode: .viewer,
+            documentJSON: #"{"type":"doc","content":[{"type":"paragraph"}]}"#,
+            markdown: markdown
+        )
+        XCTAssertFalse(decision.useJSON)
+        XCTAssertFalse(decision.payload.contains("edgeever-table-v1"))
+        XCTAssertTrue(decision.payload.contains("示例"))
+    }
+
+    func testViewerStripsInfographicMarkerAndKeepsReadableSyntax() {
+        let markdown = "```infographic\ninfographic list-row-simple-horizontal-arrow\ndata\n  title Test\n```\n\n<!-- edgeever-infographic-v1:abc -->"
+        let decision = TipTapContentSource.resolve(
+            mode: .viewer,
+            documentJSON: #"{"type":"doc","content":[{"type":"paragraph"}]}"#,
+            markdown: markdown
+        )
+        XCTAssertFalse(decision.useJSON)
+        XCTAssertFalse(decision.payload.contains("edgeever-infographic-v1"))
+        XCTAssertTrue(decision.payload.contains("infographic list-row-simple-horizontal-arrow"))
+    }
+
+    func testPosterViewerKeepsPreviewAndStripsSource() {
+        let markdown = "![Poster](/api/v1/resources/res_preview/blob)\n\n<!-- edgeever-poster-v1:abc -->"
+        let decision = TipTapContentSource.resolve(mode: .viewer, documentJSON: "{}", markdown: markdown)
+        XCTAssertFalse(decision.useJSON)
+        XCTAssertTrue(decision.payload.contains("res_preview/blob"))
+        XCTAssertFalse(decision.payload.contains("edgeever-poster-v1"))
+    }
+
     func testEditorMarkdownRemainsAuthoritativeForRichStructures() {
         let markdown = """
         1. first

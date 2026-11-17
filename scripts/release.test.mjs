@@ -10,6 +10,8 @@ import {
   draftRunResumeAction,
   nextVersion,
   parseReleaseCheckpoint,
+  updateIosMarketingVersion,
+  updateIosProjectMarketingVersion,
   parseReleaseArgs,
   playDeliveryResumeAction,
   playDeliveryFailureStrategy,
@@ -95,6 +97,50 @@ describe("release automation", () => {
     expect(playDelivery).toBeLessThan(allDraftGates);
   });
 
+  test("starts App Store delivery from the native iOS tree without blocking GitHub publication", () => {
+    const releaseSource = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
+    const iosPlan = releaseSource.indexOf('planNativeRelease("ios"');
+    const iosDispatch = releaseSource.indexOf("startIosStoreDelivery(");
+    const publication = releaseSource.indexOf('"--draft=false"');
+    const iosWait = releaseSource.indexOf('label: "App Store delivery"');
+    const restoreDraft = releaseSource.lastIndexOf('"--draft=true"');
+    const issueClose = releaseSource.indexOf("issues: [{ number: issueNumber", publication);
+
+    expect(iosPlan).toBeGreaterThan(0);
+    expect(iosDispatch).toBeGreaterThan(iosPlan);
+    expect(iosDispatch).toBeLessThan(publication);
+    expect(iosWait).toBeGreaterThan(publication);
+    expect(iosWait).toBeGreaterThan(restoreDraft);
+    expect(issueClose).toBeGreaterThan(restoreDraft);
+    expect(issueClose).toBeLessThan(iosWait);
+    expect(releaseSource).toContain("is closed; App Store delivery failed");
+    expect(releaseSource).toContain('platform: "ios"');
+    expect(releaseSource).toContain("iosRebuild: iosPlan.rebuild");
+    expect(releaseSource).toContain("updateIosMarketingVersion");
+  });
+
+  test("rewrites the iOS marketing version onto the Release tag", () => {
+    expect(
+      updateIosMarketingVersion(
+        "// comment\nMARKETING_VERSION = 1.74.0\nCURRENT_PROJECT_VERSION = 49\n",
+        "1.79.0",
+      ),
+    ).toContain("MARKETING_VERSION = 1.79.0");
+  });
+
+  test("keeps the generated iOS project aligned with the Release tag", () => {
+    const updated = updateIosProjectMarketingVersion(
+      [
+        "MARKETING_VERSION = 1.79.0;",
+        "MARKETING_VERSION = 1.79.0;",
+      ].join("\n"),
+      "1.80.0",
+    );
+
+    expect(updated.match(/MARKETING_VERSION = 1\.80\.0;/g)).toHaveLength(2);
+    expect(updated).not.toContain("MARKETING_VERSION = 1.79.0;");
+  });
+
   test("restores an exact Draft checkpoint without exposing it in Issue text", () => {
     const checkpoint = { releaseSha: "abc", desktopRunId: 123 };
     const body = `<!-- edgeever-release-checkpoint:v1.42.0\n${JSON.stringify(checkpoint)}\n-->`;
@@ -123,6 +169,26 @@ describe("release automation", () => {
     recordCheckpointRun(checkpoint, "mobileRunId", 13);
     recordCheckpointRun(checkpoint, "mobileRunId", 13);
     expect(checkpointRunIds(checkpoint)).toEqual([11, 12, 13]);
+  });
+
+  test("keeps an active App Store delivery when a Draft advances without iOS changes", () => {
+    const storedState = {
+      releaseSha: "old",
+      desktopRunId: 11,
+      iosStoreRunId: 12,
+    };
+    const checkpoint = prepareReleaseCheckpoint({
+      storedState,
+      releaseSha: "new",
+      preserveIosStoreRun: true,
+    });
+    expect(checkpoint.iosStoreRunId).toBe(12);
+    expect(checkpoint.desktopRunId).toBeUndefined();
+    expect(checkpoint.runHistory).toContainEqual({
+      field: "iosStoreRunId",
+      runId: 12,
+      releaseSha: "old",
+    });
   });
 
   test("verifies an immutable Play delivery without uploading across mobile-compatible fixes", () => {
@@ -243,6 +309,7 @@ describe("release automation", () => {
         "ja-JP:チェックを並列実行します。",
         "--change-commit",
         "abc1234",
+        "--change-issue", "none",
       ]),
     ).toMatchObject({
       issueTitle: "Improve release flow",
@@ -262,7 +329,9 @@ describe("release automation", () => {
       "--label", "maintenance",
       "--change-en", "Update the release flow.",
       "--change-zh", "更新发布流程。",
+      "--change-locale", "ja:リリースフローを更新します。",
       "--change-commit", "abc1234",
+      "--change-issue", "none",
     ])).toMatchObject({ installDesktop: false });
     expect(parseReleaseArgs([
       "--issue-title", "Release",
@@ -270,9 +339,57 @@ describe("release automation", () => {
       "--label", "maintenance",
       "--change-en", "Update the release flow.",
       "--change-zh", "更新发布流程。",
+      "--change-locale", "ja:リリースフローを更新します。",
       "--change-commit", "abc1234",
+      "--change-issue", "none",
       "--install-desktop",
     ])).toMatchObject({ installDesktop: true });
+  });
+
+  test("accepts optional contributors and deduplicates GitHub usernames", () => {
+    const args = [
+      "--issue-title", "Release",
+      "--bump", "patch",
+      "--label", "maintenance",
+      "--change-en", "Update the release flow.",
+      "--change-zh", "更新发布流程。",
+      "--change-locale", "ja:リリースフローを更新します。",
+      "--change-commit", "abc1234",
+      "--change-issue", "none",
+    ];
+    expect(parseReleaseArgs(args).contributors).toEqual([]);
+    expect(parseReleaseArgs([
+      ...args,
+      "--contributor", " @Alice ",
+      "--contributor", "alice",
+      "--contributor", "bob-smith",
+    ]).contributors).toEqual(["Alice", "bob-smith"]);
+    for (const username of ["alice,bob", "https://github.com/alice", "@@alice", "-alice", "alice-", "a--b", "a".repeat(40), "alice\n@bob", "bot[bot]"]) {
+      expect(() => parseReleaseArgs([...args, "--contributor", username]))
+        .toThrow("Invalid --contributor GitHub username");
+    }
+    expect(() => parseReleaseArgs([...args, "--contributor"]))
+      .toThrow("--contributor requires a value");
+  });
+
+  test("requires Japanese App Store What's New", () => {
+    expect(() =>
+      parseReleaseArgs([
+        "--issue-title",
+        "Missing Japanese notes",
+        "--bump",
+        "patch",
+        "--label",
+        "bug",
+        "--change-en",
+        "Fix a bug.",
+        "--change-zh",
+        "修复问题。",
+        "--change-commit",
+        "abc1234",
+        "--change-issue", "none",
+      ]),
+    ).toThrow("--change-locale ja is required");
   });
 
   test("rejects mismatched bilingual changes", () => {
@@ -317,6 +434,24 @@ describe("release automation", () => {
       resumedDraft: draftCandidate,
       withdrawnDraft: null,
     });
+  });
+
+  test("resumes replacement Drafts after earlier version numbers were reserved", () => {
+    for (const [bump, packageVersion] of [["patch", "1.17.2"], ["minor", "1.19.0"], ["major", "3.0.0"]]) {
+      const draftCandidate = {
+        tagName: `v${packageVersion}`, isDraft: true, isPrerelease: false,
+        targetCommitish: "current-head",
+      };
+      expect(resolveReleaseVersion({
+        previousVersion: "1.17.0", packageVersion, bump,
+        headSha: "current-head", draftCandidate,
+      })).toMatchObject({ releaseVersion: packageVersion, resumedDraft: draftCandidate, releaseBaseTag: "v1.17.0" });
+    }
+    expect(() => resolveReleaseVersion({
+      previousVersion: "1.17.0", packageVersion: "1.19.0", bump: "patch",
+      headSha: "current-head",
+      draftCandidate: { tagName: "v1.19.0", isDraft: true, isPrerelease: false, targetCommitish: "current-head" },
+    })).toThrow("cannot resume");
   });
 
   test("reserves a withdrawn Draft version and keeps the published audit baseline", () => {
@@ -375,6 +510,7 @@ describe("release automation", () => {
         "修复问题。",
         "--change-commit",
         "abc1234",
+        "--change-issue", "none",
       ])
     ).toThrow("--bump must be patch, minor, or major");
   });
@@ -385,20 +521,39 @@ describe("release automation", () => {
       changesZh: ["优化发布流程。"],
       issueNumber: 126,
     });
+    expect(notes).toContain("## 主要更新");
     expect(notes).toContain("## Key Changes");
     expect(notes).toContain("Related Issue: #126");
-    expect(notes).toContain("## 🇨🇳 中文说明 / Chinese Changelog");
     expect(notes).toContain("关联 Issue：#126");
-    expect(notes.indexOf("## 🇨🇳 中文说明 / Chinese Changelog"))
+    expect(notes).not.toContain("中文说明");
+    expect(notes).not.toContain("Chinese Changelog");
+    expect(notes.indexOf("## 主要更新"))
       .toBeLessThan(notes.indexOf("## Key Changes"));
     expect(notes.indexOf("优化发布流程。"))
       .toBeLessThan(notes.indexOf("Improve the release flow."));
     expect(notes).not.toContain("## Verification");
+    expect(notes).not.toContain("Contributors");
     expect(notes).not.toContain("## 验证");
     expect(notes).not.toContain("bun run");
     expect(notes).not.toContain("Version bump");
     expect(notes).not.toContain("release plan");
     expect(notes).not.toContain("\\n");
+  });
+
+  test("appends manually selected contributors after unchanged bilingual notes", () => {
+    const options = {
+      changesEn: ["Improve the release flow."],
+      changesZh: ["优化发布流程。"],
+      issueNumber: 126,
+    };
+    const original = buildReleaseNotes(options);
+    expect(buildReleaseNotes({ ...options, contributors: [] })).toBe(original);
+    expect(buildReleaseNotes({
+      ...options,
+      contributors: ["@Alice", "alice", "bob-smith"],
+    })).toBe(`${original}\n贡献者 / Contributors：@Alice @bob-smith\n`);
+    expect(() => buildReleaseNotes({ ...options, contributors: ["alice\n@bob"] }))
+      .toThrow("Invalid --contributor GitHub username");
   });
 
   test("builds the in-app summary from the same bilingual release changes", () => {

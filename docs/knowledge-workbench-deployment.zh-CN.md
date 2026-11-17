@@ -1,16 +1,18 @@
 # 知识工作台部署
 
-本 Fork 以 EdgeEver 1.74.0（`3c79414d8094f2cfde9c084a4f48a1d67bec86d6`）为基线，增加工作目录 API、笔记原子版本检查、附件元数据接口及独立 Node CLI。不新增数据库迁移；CLI 保持独立版本号。
+本 Fork 的当前升级目标为 EdgeEver 2.28.2（上游提交 `30bd18fdfa48118da265f849b974f9fbd2f0f46f`），并保留工作目录 API、笔记原子版本检查、附件元数据接口及独立 Node CLI 0.8.0。定制层不新增数据库迁移；2.28.2 上游迁移目标为 `0095`，文件工作区协议继续使用 `protocolVersion: 1`。
 
-在 `a20070322/edgeever` 手动运行 **Build Knowledge Workbench image** 工作流。它检查 API 类型、相关集成测试和 npm 包，再为 Linux amd64 构建 Web/API 容器。镜像标签为 `ghcr.io/a20070322/edgeever:kw-<完整提交SHA>`，同时输出带校验和的 Docker 镜像归档，供无法访问镜像仓库的主机使用。该工作流不发布 npm 包或上游桌面/移动端 Release。
+正式发布源仅为 `LarryGuan/edgeever`。首次跨版本升级先运行 `./auto/update.sh --build-only`：脚本检查并同步 `main`、测试独立 CLI、触发云效流水线 `5282954` 构建 Linux amd64 镜像到 `registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy`，然后停在 `deploy=SWITCH_MANUAL`。生产数据冷副本的同机隔离验证通过后，才使用脚本输出的 `./auto/update.sh --resume-run <运行号>` 放行同一次运行，并更新本机 CLI/Skill。首次升级禁止直接使用一体化 `--run`。
 
-本 Fork 排除上游自动同步任务，避免无人值守时替换定制代码。上游升级须复审和验证后推进 main。保留 1.74.0 的 `/api/openapi.json` 连通性探针；扩展接口说明放在 `file-workspace.openapi.json`。
+云效发布不发布 npm 包或上游桌面/移动端 Release。旧的 Fork 专用 GitHub 镜像工作流已经移除，避免与上游仅允许官方仓库运行 Actions Job 的门禁冲突。本 Fork 明确排除上游自动同步任务，避免无人值守时替换定制代码；后续升级须人工复审和验证后合并。保留 `/api/openapi.json` 连通性探针；扩展接口说明放在 `file-workspace.openapi.json`。
 
 部署前，在仓库外备份生产 `/data` 全卷和 Compose 配置。用旧实例的隔离副本验证新镜像，包括旧数据读取、工作目录拉取/回写/冲突/附件。验证通过后仅替换生产服务镜像，保留旧镜像及备份。升级失败时恢复旧镜像；若未来版本产生不兼容数据变化，则恢复升级前数据。严禁两个服务实例共用同一个 SQLite 卷。
 
 凭据、数据库、笔记正文和备份不得进入 Git 或公开构建产物。Fork 源码继续遵守上游 AGPL 许可证。
 
-## 部署验证记录 — 2026-09-16
+## 历史部署验证记录 — 2026-09-16
+
+以下记录属于前代 `a20070322` 基线，仅作为审计历史，不代表 2.28.2 升级已经验证或发布。
 
 - Fork：https://github.com/a20070322/edgeever
 - 运行提交：`a98478bcbb6ba75566471c54b2e297bafc04574a`。

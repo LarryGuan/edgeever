@@ -1,6 +1,6 @@
 # 知识工作台 EdgeEver CLI
 
-## 当前流程：CLI 0.7.0
+## 当前流程：CLI 0.8.0
 
 在已链接的目录或其子目录中，只需运行一次：
 
@@ -63,7 +63,7 @@ GC 不扫描或删除用户笔记目录和附件仓库。空间预算针对受�
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.7.0.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.8.0.tgz
 edgeever --help
 ```
 

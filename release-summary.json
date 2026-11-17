@@ -1,23 +1,20 @@
 {
-  "version": "1.74.0",
+  "version": "2.28.2",
   "changes": {
     "en-US": [
-      "Add Agent mode to the in-app AI assistant so it can search, organize, and write notes; the standalone Paw page, discovery hub, and settings tab are gone, with those capabilities folded into the assistant. The open note is context rather than a search filter, note writes apply immediately, and the transcript stays on the newest reply.",
-      "Prevent a single tray or menu-bar screenshot from creating two notes.",
-      "Make the macOS menu-bar cat a heavier template glyph that matches neighboring status icons.",
-      "Shorten plugin marketplace copy so the header stays aligned with its actions."
+      "Restore desktop PDF export from note menus.",
+      "Allow desktop sign-out when the instance is offline, and clarify the current instance and sign-in switching instructions.",
+      "Fix dark appearance in infographic galleries, canvases, and poster workspaces, improve editing control visibility, and unify solid button colors."
     ],
     "zh-CN": [
-      "内置 AI 助手新增 Agent 模式，可检索、整理并直接改笔记；独立的爪印页面、发现中心和设置页已下线，能力都收进助手。当前打开的笔记只作为上下文，不会限制搜索范围；笔记写入立即生效，对话会跟着最新回复滚动。",
-      "从托盘或菜单栏截屏时，同一次操作不会再生成两篇笔记。",
-      "macOS 菜单栏猫咪图标加粗描边，和其他状态图标一样清晰。",
-      "缩短插件市场说明文案，让标题行与操作按钮对齐。"
+      "修复桌面端从笔记菜单导出 PDF 失败的问题。",
+      "修复实例离线时桌面端无法退出登录的问题，明确显示当前实例及切换登录方式。",
+      "修复信息图图库、画布和海报工作区的深色模式显示，改善编辑控件可见性并统一实心按钮配色。"
     ],
     "ja": [
-      "アプリ内 AI アシスタントに Agent モードを追加し、ノートの検索・整理・書き込みができるようにしました。独立した Paw ページ、発見ハブ、設定タブは廃止し、それらの機能はアシスタントに統合しています。開いているノートは検索範囲ではなく文脈として扱い、ノートの書き込みは即時反映され、会話は最新の返信に追従します。",
-      "トレイまたはメニューバーからのスクリーンショットが、1回の操作で2つのノートを作らないようにしました。",
-      "macOS メニューバーの猫アイコンを、他のステータスアイコンと同じ太さのテンプレート画像にしました。",
-      "プラグインマーケットの説明文を短くし、見出し行と操作ボタンが揃うようにしました。"
+      "デスクトップ版のノートメニューから PDF を書き出せない問題を修正しました。",
+      "インスタンスがオフラインでもデスクトップ版からサインアウトできるようにし、現在のインスタンスと接続先の切り替え手順を明確にしました。",
+      "インフォグラフィックのギャラリーとキャンバス、ポスター編集画面のダーク表示を修正し、編集操作を見つけやすくしてボタンの配色を統一しました。"
     ]
   }
 }

@@ -92,6 +92,8 @@ describe("publish layout catalog", () => {
     expect(planHeadingDecoration("h2", "stub", 0)).toEqual({ kind: "chapter", chapterLabel: "01" });
     expect(planHeadingDecoration("h2", "grove", 0)).toEqual({ kind: "none" });
     expect(planHeadingDecoration("h1", "letter", 0)).toEqual({ kind: "title" });
+    expect(planHeadingDecoration("h4", "letter", 0)).toEqual({ kind: "none" });
+    expect(planHeadingDecoration("h6", "guide", 0)).toEqual({ kind: "none" });
     expect(PUBLISH_LAYOUT_CHROME.letter.chapter).toBe("aside-serif");
     expect(PUBLISH_LAYOUT_CHROME.letter.quote).toBe("grid-card");
     expect(PUBLISH_LAYOUT_CHROME.brief.quoteBanner).toBe("EDITOR'S NOTE");
@@ -110,6 +112,8 @@ describe("publish layout CSS", () => {
     expect(phone.p).toContain("margin: 0 0 28px");
     expect(phone.h1).toContain("font-size: 24px");
     expect(phone.h2).toContain("font-size: 20px");
+    expect(phone.h4).toContain("font-size: 14px");
+    expect(phone.h6).toContain("font-size: 13px");
     expect(desktop.p).toContain("font-size: 15px");
     expect(desktop.p).toContain("line-height: 2");
   });
@@ -155,17 +159,20 @@ describe("publish layout CSS", () => {
 });
 
 describe("copy pipeline wiring", () => {
-  test("wechat copy follows paper editor themes and keeps compact copy for other themes", () => {
+  test("wechat copy uses account prose and no longer applies paper layouts", () => {
     const source = readFileSync(new URL("./wechat-copy.ts", import.meta.url), "utf8");
     const preferenceCard = readFileSync(new URL("../components/settings/PreferenceCard.tsx", import.meta.url), "utf8");
 
-    expect(source).toContain("resolvePaperEditorTheme");
-    expect(source).toContain("applyPublishLayout");
-    expect(source).toContain('"phone"');
-    expect(source).toContain("MEMO_CONTENT_STYLE");
+    expect(source).not.toContain("resolvePaperEditorTheme");
+    expect(source).not.toContain("applyPublishLayout");
+    expect(source).toContain("noteProseCodeFontSize");
+    expect(source).toContain("NOTE_PROSE_HEADING_SCALE");
+    expect(source).toContain('rhythm["--editor-paragraph-spacing"]');
+    expect(source).toContain("[data-note-palette]");
     expect(source).toContain("preparePublishArticle");
+    expect(source).not.toContain("editorThemeOverride");
     expect(source).toContain("ProseMirror-separator");
-    expect(source).toContain("findOriginalImage");
+    expect(source).toContain("loadPublishImage");
     expect(source).toContain("svgToWeChatImage");
     expect(source).toContain("rasterizePublishOrnamentsForWeChat");
     expect(source).toContain('fillStyle = "#ffffff"');
@@ -175,7 +182,7 @@ describe("copy pipeline wiring", () => {
     expect(preferenceCard).not.toContain('t("settings.editorThemeTitle")');
   });
 
-  test("drives the rich editor rhythm from paper editor themes", () => {
+  test("keeps paper layout styles available without applying them in the editor", () => {
     const editorPane = readFileSync(new URL("../components/EditorPane.tsx", import.meta.url), "utf8");
     const css = readFileSync(new URL("../styles/publish-layout.css", import.meta.url), "utf8");
     const vars = publishEditorCssVars("letter", "dawn");
@@ -193,10 +200,10 @@ describe("copy pipeline wiring", () => {
     expect(vars["--publish-ornament-brush"]).toContain("url(\"data:image/svg+xml");
     expect(css).toContain("--editor-theme-accent: var(--publish-accent)");
     expect(css).toContain("--brand-green: var(--publish-accent)");
-    expect(editorPane).toContain("isPaperEditorTheme(editorTheme)");
-    expect(editorPane).toContain('data-paper-theme={isPaperEditorTheme(editorTheme) ? "true" : undefined}');
-    expect(editorPane).toContain("publishEditorCssVars");
-    expect(editorPane).toContain('data-publish-surface={isMobileViewport ? "phone" : "desktop"}');
+    expect(editorPane).toContain('data-editor-theme="default"');
+    expect(editorPane).not.toContain("isPaperEditorTheme");
+    expect(editorPane).not.toContain("publishEditorCssVars");
+    expect(editorPane).not.toContain("data-paper-theme");
     expect(css).toContain("counter-increment: publish-h2");
     expect(css).toContain("[data-paper-theme]");
     expect(css).toContain('[data-editor-theme="letter"]');
@@ -205,14 +212,28 @@ describe("copy pipeline wiring", () => {
     expect(css).toContain("line-height: var(--editor-body-line-height)");
   });
 
-  test("phone preview markup applies the paper layout instead of raw editor chrome", () => {
+  test("phone preview markup follows account prose instead of a paper layout", () => {
     const source = readFileSync(new URL("./wechat-copy.ts", import.meta.url), "utf8");
     const preview = readFileSync(new URL("../components/EditorPhonePreview.tsx", import.meta.url), "utf8");
     expect(source).toContain("export const preparePublishArticle");
-    expect(source).toContain('applyPublishLayout(root, paperTheme.layout, paperTheme.palette, "phone")');
-    expect(source).toContain("editorThemeOverride");
-    expect(preview).toContain("preparePublishArticle(editor.getHTML(), editor.view.dom, editorTheme)");
+    expect(source).not.toContain("applyPublishLayout");
+    expect(source).toContain("applyLegacyWeChatStyles");
+    expect(source).toContain("const bold = colors ? `font-weight: 800; color: ${accent};` : \"font-weight: 800;\"");
+    expect(source).toContain("accentOnly");
+    expect(source).toContain("#27272a");
+    expect(source).toContain("#3d4450");
+    expect(source).toContain("#f3f5f7");
+    expect(source).toContain("data-ee-math");
+    expect(source).toContain("katex.renderToString");
+    expect(source).toContain("rasterizeMathForWeChat");
+    expect(source).not.toContain("#be123c");
+    expect(source).not.toContain("#10b981");
+    expect(source).not.toContain("#f0fdf4");
+    expect(source).toContain('palette !== "native"');
+    expect(source).not.toContain('palette !== "custom"');
+    expect(preview).toContain("preparePublishArticle(editor.getHTML(), editor.view.dom)");
     expect(preview).toContain("previewRef.current?.setAttribute(\"style\", markup.style)");
-    expect(preview).toContain("key={editorTheme}");
+    expect(preview).toContain("noteProse");
+    expect(preview).not.toContain("key={editorTheme}");
   });
 });

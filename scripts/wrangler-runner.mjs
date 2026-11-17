@@ -13,7 +13,7 @@ const REPOSITORY_WRANGLER_VALUES = {
   bucket_name: "edgeever-resources",
   preview_bucket_name: "edgeever-resources-preview",
 };
-const REPOSITORY_WRANGLER_SHA256 = "d49ed530169a8597d2c17d5c6b99e03e371c8710124bbce4e526cf2b3a720f7a";
+const REPOSITORY_WRANGLER_SHA256 = "5d86ce3467cd0975e2c91cfefa26c214c369782ab92e85713f5afb9787b5c24e";
 
 const configValue = (config, key) => {
   const match = config.match(new RegExp(`^${key}\\s*=\\s*(?:"([^"]*)"|(true|false))`, "m"));
@@ -115,6 +115,13 @@ export const shouldCaptureDeploymentTargets = (env = process.env) =>
 
 export const LOCAL_DEV_CREDENTIALS_ENCRYPTION_KEY =
   "edgeever-local-development-credentials-key-v1";
+
+// Wrangler refuses to start `dev` when the assets directory is missing and has no
+// option to create it. Like Wrangler, resolve `[assets].directory` from the config's directory.
+export const resolveWranglerAssetsDirectory = (config, configDirectory) => {
+  const match = config.match(/^\s*\[assets\][^[]*?^\s*directory\s*=\s*["']([^"']+)["']/m);
+  return match ? resolve(configDirectory, match[1]) : null;
+};
 
 export const buildLocalDevEnvironmentFile = () => [
   "# Local-only values. Remote instance secrets are intentionally excluded.",
@@ -255,4 +262,10 @@ export const runWranglerSync = (args, options = {}) => {
   }
 
   return result;
+};
+
+/** Demo must reach application redirects even when a static asset exists. */
+export const configureDemoAssetRouting = (config, demoMode) => {
+  if (!demoMode) return config;
+  return config.replace(/(\[assets\][\s\S]*?^run_worker_first\s*=)[^\n]*/m, "$1 true");
 };

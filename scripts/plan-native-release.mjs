@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const planNativeRelease = (platform, changedFiles) => {
-  if (!["mobile", "desktop"].includes(platform)) {
+  if (!["mobile", "desktop", "ios"].includes(platform)) {
     throw new Error(`Unsupported native release platform: ${platform}`);
   }
 
@@ -27,13 +27,17 @@ export const planNativeRelease = (platform, changedFiles) => {
   const relevantPrefixes =
     platform === "mobile"
       ? ["apps/mobile/", "packages/client/", "packages/shared/"]
-      : [
-          "apps/desktop/",
-          "apps/web/",
-          "crates/desktop-sidecar/",
-          "packages/client/",
-          "packages/shared/",
-        ];
+      : platform === "ios"
+        ? ["apps/ios/", "packages/shared/"]
+        : [
+            "apps/desktop/",
+            "apps/web/",
+            "crates/desktop-sidecar/",
+            "migrations/",
+            "packages/client/",
+            "packages/image-host/",
+            "packages/shared/",
+          ];
 
   const relevantFiles =
     platform === "mobile"
@@ -43,10 +47,13 @@ export const planNativeRelease = (platform, changedFiles) => {
           ".github/workflows/store-delivery.yml",
           "bun.lock",
           "scripts/build-android-local.sh",
+          "apps/desktop/src/main/wechat-chat-transcript.cjs",
           "scripts/download-play-universal-apk.mjs",
           "scripts/verify-android-apk-signature.mjs",
           ...mobileOnlyDependencyPatches,
         ])
+      : platform === "ios"
+        ? new Set(["apps/desktop/src/main/wechat-chat-transcript.cjs"])
       : new Set([
           ".cargo/config.toml",
           ".github/workflows/desktop-build.yml",
@@ -62,6 +69,8 @@ export const planNativeRelease = (platform, changedFiles) => {
           "scripts/sign-windows-update-manifest.mjs",
           "scripts/verify-windows-update-release.mjs",
           "scripts/verify-desktop-package.mjs",
+          "scripts/desktop-production-files.mjs",
+          "scripts/verify-desktop-production-runtime.cjs",
           "scripts/verify-desktop-cross-version-startup.mjs",
           "scripts/verify-packaged-desktop-startup.mjs",
           "scripts/verify-renderer-origin-migration.mjs",
@@ -84,9 +93,9 @@ export const planNativeRelease = (platform, changedFiles) => {
 const run = () => {
   const [platform, baseRef, headRef] = process.argv.slice(2);
 
-  if (!["mobile", "desktop"].includes(platform) || !baseRef || !headRef) {
+  if (!["mobile", "desktop", "ios"].includes(platform) || !baseRef || !headRef) {
     console.error(
-      "Usage: node scripts/plan-native-release.mjs <mobile|desktop> <base-ref> <head-ref>",
+      "Usage: node scripts/plan-native-release.mjs <mobile|desktop|ios> <base-ref> <head-ref>",
     );
     process.exit(1);
   }

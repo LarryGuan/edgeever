@@ -28,7 +28,9 @@ concurrency:
 
 jobs:
   update:
-    if: github.repository != 'tianma-if/edgeever' && github.repository != 'a20070322/edgeever'
+    # LarryGuan/edgeever carries reviewed server and CLI extensions. Upstream
+    # releases are merged manually so a scheduled job can never replace them.
+    if: github.repository != 'tianma-if/edgeever' && github.repository != 'a20070322/edgeever' && github.repository != 'LarryGuan/edgeever'
     name: Sync Fork and trigger deployment
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -243,7 +245,15 @@ jobs:
         if: steps.upstream.outputs.align_mode == 'merge'
         run: |
           set -euo pipefail
-          bun install --frozen-lockfile
+          for attempt in 1 2 3; do
+            if bun install --frozen-lockfile; then
+              break
+            fi
+            if [[ "$attempt" = "3" ]]; then
+              exit 1
+            fi
+            sleep "$((15 * attempt))"
+          done
           bun run db:migrate:local
           bun run test
           bun run typecheck

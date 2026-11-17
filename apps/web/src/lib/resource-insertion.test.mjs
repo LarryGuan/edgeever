@@ -3,7 +3,7 @@ import { Editor } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import StarterKit from "@tiptap/starter-kit";
 import { closeHistory, history, undo, redo } from "@tiptap/pm/history";
-import { ImageGallery, IMAGE_GALLERY_NODE_TYPE } from "@edgeever/shared";
+import { FileAttachment, ImageGallery, IMAGE_GALLERY_NODE_TYPE } from "@edgeever/shared";
 import { insertUploadedResources } from "./resource-insertion";
 import { getResourceInsertionTarget } from "./resource-insertion-target";
 
@@ -13,7 +13,7 @@ const gallery = (layout = "3", sources = ["one", "two"]) => ({
   type: IMAGE_GALLERY_NODE_TYPE, attrs: { layout }, content: sources.map(image),
 });
 const makeEditor = (content) => new Editor({
-  extensions: [StarterKit, Image, ImageGallery], content: { type: "doc", content },
+  extensions: [StarterKit, Image, ImageGallery, FileAttachment], content: { type: "doc", content },
 });
 const insert = (editor, target, content, select = true) => {
   expect(editor.commands.command(insertUploadedResources(target, content, select))).toBe(true);
@@ -21,6 +21,27 @@ const insert = (editor, target, content, select = true) => {
 };
 
 describe("uploaded resources beside an existing gallery", () => {
+  test("inserts a Word attachment into an empty note", () => {
+    const editor = makeEditor([paragraph()]);
+    const attachment = {
+      type: "paragraph",
+      content: [{
+        type: "edgeeverFileAttachment",
+        attrs: {
+          url: "edgeever-staged://stage_word_1",
+          label: "附件：软件外包合同.docx",
+          filename: "软件外包合同.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          byteSize: 42_559,
+        },
+      }],
+    };
+
+    insert(editor, { from: 1, to: 1 }, [attachment]);
+    expect(editor.getJSON().content[0].content[0]).toMatchObject(attachment.content[0]);
+    editor.destroy();
+  });
+
   test("still extends a gallery after saving and reloading the note", () => {
     const original = makeEditor([gallery("2")]);
     const saved = JSON.parse(JSON.stringify(original.getJSON()));
@@ -34,10 +55,62 @@ describe("uploaded resources beside an existing gallery", () => {
     editor.destroy();
   });
 
-  test("keeps a single upload standalone when there is no neighboring gallery", () => {
+  test("a single upload beside a standalone image becomes one gallery", () => {
     const editor = makeEditor([image("old"), paragraph()]);
-    insert(editor, 2, [image("new")]);
-    expect(editor.getJSON().content.map((node) => node.type)).toEqual(["image", "image"]);
+    editor.commands.setNodeSelection(0);
+    insert(editor, getResourceInsertionTarget(editor.state.selection), [image("new")]);
+    expect(editor.getJSON().content.map((node) => node.type)).toEqual([IMAGE_GALLERY_NODE_TYPE, "paragraph"]);
+    expect(editor.getJSON().content[0].attrs.layout).toBe("auto");
+    expect(editor.getJSON().content[0].content.map((node) => node.attrs.src)).toEqual(["old", "new"]);
+    expect(editor.state.selection.node.attrs.src).toBe("new");
+    insert(editor, getResourceInsertionTarget(editor.state.selection), [image("third")]);
+    expect(editor.getJSON().content).toHaveLength(2);
+    expect(editor.getJSON().content[0].content.map((node) => node.attrs.src)).toEqual(["old", "new", "third"]);
+    editor.destroy();
+  });
+
+  test("undo restores the standalone image after an adjacent upload is grouped", () => {
+    const editor = makeEditor([image("old"), paragraph()]);
+    editor.view.updateState(editor.state.reconfigure({ plugins: [history()] }));
+    const before = editor.getJSON();
+    editor.view.dispatch(closeHistory(editor.state.tr));
+    editor.commands.setNodeSelection(0);
+    insert(editor, getResourceInsertionTarget(editor.state.selection), [image("new")]);
+    expect(undo(editor.state, editor.view.dispatch)).toBe(true);
+    expect(editor.getJSON()).toEqual(before);
+    expect(redo(editor.state, editor.view.dispatch)).toBe(true);
+    expect(editor.getJSON().content[0].content.map((node) => node.attrs.src)).toEqual(["old", "new"]);
+    editor.destroy();
+  });
+
+  test("a single upload before a standalone image keeps upload order", () => {
+    const editor = makeEditor([image("old"), paragraph("keep")]);
+    insert(editor, 0, [image("new")]);
+    expect(editor.getJSON().content[0].content.map((node) => node.attrs.src)).toEqual(["new", "old"]);
+    expect(editor.getJSON().content[1].content[0].text).toBe("keep");
+    editor.destroy();
+  });
+
+  test("a multi-image upload absorbs the adjacent standalone run and preserves its metadata", () => {
+    const editor = makeEditor([image("old"), paragraph()]);
+    editor.commands.setNodeSelection(0);
+    insert(editor, getResourceInsertionTarget(editor.state.selection), [image("new-a"), image("new-b")]);
+    const gallery = editor.getJSON().content[0];
+    expect(gallery.attrs.layout).toBe("auto");
+    expect(gallery.content.map((node) => node.attrs.src)).toEqual(["old", "new-a", "new-b"]);
+    expect(gallery.content[1].attrs.title).toBe("new-a");
+    editor.destroy();
+  });
+
+  test("uploading beside loose images joins the earlier gallery and keeps its layout", () => {
+    const editor = makeEditor([gallery("3"), image("loose"), gallery("2", ["other-a", "other-b"])]);
+    insert(editor, 5, [image("new")]);
+    const content = editor.getJSON().content;
+    expect(content.map((node) => node.type)).toEqual([IMAGE_GALLERY_NODE_TYPE, IMAGE_GALLERY_NODE_TYPE]);
+    expect(content[0].attrs.layout).toBe("3");
+    expect(content[0].content.map((node) => node.attrs.src)).toEqual(["one", "two", "loose", "new"]);
+    expect(content[1].attrs.layout).toBe("2");
+    expect(content[1].content.map((node) => node.attrs.src)).toEqual(["other-a", "other-b"]);
     editor.destroy();
   });
 

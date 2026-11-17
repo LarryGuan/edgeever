@@ -16,13 +16,9 @@ import {
 import { getPluginDetailPath, hasPluginSettings, isPluginCardCommand } from "@/lib/plugins/plugin-navigation";
 import type { PluginUpdateInfo } from "@/lib/plugins/plugin-updates";
 import type { RegisteredPluginCommand } from "@/lib/plugins/plugin-host";
+import type { MarketplaceRevocation } from "@edgeever/plugin-api";
 
-const permissionLabel = (permission: string) => permission.replace(":", " · ");
-
-const sourceBadgeClassName = (sourceKey: ReturnType<typeof getPluginCatalogSourceKey>) =>
-  sourceKey === "github" || sourceKey === "manifest"
-    ? "bg-amber-50 text-amber-700"
-    : "bg-emerald-50 text-emerald-700";
+const sourceBadgeClassName = "bg-slate-100 text-slate-700";
 
 export const PluginCatalogCard = ({
   item,
@@ -35,11 +31,13 @@ export const PluginCatalogCard = ({
   onUpdate,
   onRunCommand,
   onUninstall,
+  revocation,
 }: {
   item: PluginCatalogItem;
   update?: PluginUpdateInfo;
   commands: RegisteredPluginCommand[];
   pendingId: string | null;
+  revocation?: MarketplaceRevocation;
   onOpenPlugin?: (pluginId: string) => void;
   onToggle: (enabled: boolean) => void;
   onInstallMarketplace: () => void;
@@ -47,10 +45,11 @@ export const PluginCatalogCard = ({
   onRunCommand: (command: RegisteredPluginCommand) => void;
   onUninstall: () => void;
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const extension = item.extension;
-  const name = getPluginCatalogName(item);
-  const description = getPluginCatalogDescription(item);
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const name = getPluginCatalogName(item, locale);
+  const description = getPluginCatalogDescription(item, locale);
   const repositoryUrl = getPluginCatalogRepositoryUrl(item);
   const version = getPluginCatalogVersion(item);
   const sourceKey = getPluginCatalogSourceKey(item);
@@ -64,7 +63,7 @@ export const PluginCatalogCard = ({
       aria-label={extension ? t("plugins.details.open", { name }) : undefined}
       className={`flex min-w-0 flex-col rounded-lg border border-slate-200 bg-card p-3 ${
         extension
-          ? "cursor-pointer transition-colors hover:border-emerald-300 hover:bg-emerald-50/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+          ? "cursor-pointer transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40"
           : ""
       }`}
       onClick={extension ? (event) => {
@@ -83,33 +82,41 @@ export const PluginCatalogCard = ({
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="truncate text-sm font-semibold text-slate-900">{name}</span>
             {extension ? (
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {extension.manifest.type}
               </span>
             ) : null}
-            {extension && version ? <span className="text-[11px] text-slate-400">v{version}</span> : null}
+            {extension && version ? <span className="text-xs text-slate-500">v{version}</span> : null}
             {sourceKey === "official" ? (
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                 {t("plugins.marketplace.officialAutoUpdate")}
               </span>
             ) : sourceKey ? (
-              <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] ${sourceBadgeClassName(sourceKey)}`}>
+              <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs ${sourceBadgeClassName}`}>
                 {sourceKey === "verified" ? <BadgeCheck className="h-3 w-3" /> : sourceKey === "github" ? <GitHubMark className="h-3 w-3" /> : null}
                 {t(`plugins.sources.${sourceKey}`)}
               </span>
             ) : null}
             {update ? (
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-800">
                 {t("plugins.updates.available", { version: update.latestVersion })}
               </span>
             ) : null}
           </div>
           {!extension && item.marketplaceEntry ? (
-            <div className="mt-0.5 text-[10px] text-slate-400">
+            <div className="mt-0.5 text-xs text-slate-400">
               {item.marketplaceEntry.author} · {item.marketplaceEntry.category}{version ? ` · v${version}` : ""}
             </div>
           ) : null}
           {description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{description}</p> : null}
+          {item.marketplaceEntry?.listing === "community" ? (
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              {item.marketplaceEntry.licenseSpdx
+                ? `${t("plugins.marketplace.license", { spdx: item.marketplaceEntry.licenseSpdx })} · `
+                : ""}
+              {t("plugins.marketplace.admissionNotice")}
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {repositoryUrl ? (
@@ -117,7 +124,7 @@ export const PluginCatalogCard = ({
               href={repositoryUrl}
               label={t("plugins.marketplace.openRepository", { name })}
               showTooltip={false}
-              className="h-7 w-7 justify-center rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+              className="h-7 w-7 justify-center rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40"
               iconClassName="h-3.5 w-3.5"
             />
           ) : null}
@@ -132,21 +139,11 @@ export const PluginCatalogCard = ({
         </div>
       </div>
 
-      {extension?.manifest.type === "plugin" && extension.manifest.permissions.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {extension.manifest.permissions.slice(0, 3).map((permission) => (
-            <span key={permission} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-              {permission === "network:public" ? t("plugins.permissions.publicNetwork") : permissionLabel(permission)}
-            </span>
-          ))}
-          {extension.manifest.permissions.length > 3 ? (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-              +{extension.manifest.permissions.length - 3}
-            </span>
-          ) : null}
+      {revocation ? (
+        <div role="status" className="mt-2 text-xs leading-5 text-rose-700">
+          {t("plugins.marketplace.revoked", { reason: revocation.reason })}
         </div>
       ) : null}
-
       {extension?.error ? <div className="mt-2 text-xs text-rose-600">{extension.error}</div> : null}
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
@@ -158,7 +155,7 @@ export const PluginCatalogCard = ({
             </Link>
           </Button>
         ) : null}
-        {update ? (
+        {update && !revocation ? (
           <Button
             size="sm"
             className="h-8 gap-1.5 text-xs"
@@ -169,7 +166,7 @@ export const PluginCatalogCard = ({
             {t("plugins.updates.update")}
           </Button>
         ) : null}
-        {!extension && item.marketplaceEntry ? (
+        {!extension && item.marketplaceEntry && !revocation ? (
           <Button
             size="sm"
             className="h-8 gap-1.5 text-xs"
@@ -180,7 +177,7 @@ export const PluginCatalogCard = ({
             {pendingId === marketplaceActionId ? t("plugins.installing") : t("plugins.install")}
           </Button>
         ) : null}
-        {replaceWithVerified && !update ? (
+        {replaceWithVerified && !update && !revocation ? (
           <Button
             size="sm"
             className="h-8 gap-1.5 text-xs"

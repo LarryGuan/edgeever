@@ -114,6 +114,32 @@ describe("resource route contracts", () => {
     expect(await response.json()).toMatchObject({ error: { code: "forbidden" } });
   });
 
+  test("lets a memo writer attach an image without the attachment-management scope", async () => {
+    const form = new FormData();
+    form.append("file", new File([Uint8Array.of(0xff, 0xd8, 0xff)], "cat.jpg", { type: "image/jpeg" }));
+    let uploaded = null;
+    const response = await createApp(
+      { ...agentAuth, scopes: ["write:memos"] },
+      async () => null,
+      {
+        getMemoDetail: async () => ({ id: "memo_1" }),
+        createImageResource: async (_context, input) => {
+          uploaded = input;
+          return { id: "res_1" };
+        },
+      },
+    ).request(
+      "/api/v1/memos/memo_1/resources",
+      { method: "POST", body: form },
+      createEnvironment(),
+    );
+
+    expect(response.status).toBe(201);
+    expect(uploaded.memoId).toBe("memo_1");
+    expect(uploaded.filename).toBe("cat.jpg");
+    expect(await response.json()).toMatchObject({ resource: { id: "res_1" } });
+  });
+
   test("replaces resource content with an explicit optimistic-concurrency baseline", async () => {
     let replacement;
     const form = new FormData();
@@ -145,6 +171,25 @@ describe("resource route contracts", () => {
     });
     expect(new TextDecoder().decode(replacement.bytes)).toBe("scene");
     expect(await response.json()).toMatchObject({ resource: { id: "res_1", sha256: "next-checksum" } });
+  });
+
+  test("only authorized writers can discover safe writeback support", async () => {
+    expect((await createApp().request("/api/v1/resources/writeback-capabilities", {}, createEnvironment())).status).toBe(403);
+    const response = await createApp({ ...agentAuth, scopes: ["write:resources"] })
+      .request("/api/v1/resources/writeback-capabilities", {}, createEnvironment());
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ preserveFilename: true });
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  test("the dedicated writeback route always preserves filenames even if the optional field is disabled", async () => {
+    let replacement;
+    const form = new FormData(); form.append("file", new File(["edit"], "local-copy.xlsx"));
+    form.append("expectedContentHash", "checksum"); form.append("preserveFilename", "false");
+    const response = await createApp({ ...agentAuth, scopes: ["write:resources"] }, async () => resourceRow, {
+      replaceResourceContent: async (_context, input) => { replacement = input; return resourceRow; },
+    }).request("/api/v1/resources/res_1/blob/writeback", { method: "PUT", body: form }, createEnvironment());
+    expect(response.status).toBe(200); expect(replacement.preserveFilename).toBe(true);
+    expect(response.headers.get("X-EdgeEver-Writeback")).toBe("preserve-filename");
   });
 
   test("initializes a bounded multipart upload after memo authorization", async () => {
@@ -408,4 +453,24 @@ describe("resource route contracts", () => {
     expect(deletes).toBe(1);
     expect(batches).toBe(0);
   });
+});
+
+
+test("SVG image and legacy attachment responses are sandboxed without changing original bytes", async () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
+  for (const kind of ["image", "attachment"]) {
+    const environment = createEnvironment();
+    environment.storage.resources = {
+      get: async () => ({ body: new Blob([svg]).stream(), writeHttpMetadata: () => {} }),
+    };
+    const response = await createApp(agentAuth, async () => ({
+      ...resourceRow, kind, mime_type: "image/svg+xml", filename: "diagram.svg",
+      byte_size: new TextEncoder().encode(svg).length, storage_config_id: null,
+    })).request("/api/v1/resources/res_1/blob", {}, environment);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/svg+xml");
+    expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; sandbox");
+    expect(response.headers.get("content-disposition")).toStartWith(kind === "image" ? "inline;" : "attachment;");
+    expect(await response.text()).toBe(svg);
+  }
 });

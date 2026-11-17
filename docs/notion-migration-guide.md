@@ -1,6 +1,9 @@
 # Notion 笔记极简迁移指引
 
-[简体中文](notion-migration-guide.md) | [English](notion-migration-guide.en-US.md)
+[简体中文](note-migration-guide.md) | [English](note-migration-guide.en-US.md)
+
+> 💡 **提示**：第三方笔记迁入教程现已全面升级并合并至统一指引：
+> 👉 **[第三方笔记平滑迁入 EdgeEver 完整指南](note-migration-guide.md)**（全面覆盖原生一键导入与 AI Agent / MCP 迁入）。
 
 得益于 EdgeEver 对 AI Agent 和 Model Context Protocol (MCP) 的原生支持，如果你想将 Notion 笔记库搬迁到 EdgeEver，最优雅的方式是利用 AI 助手作为数据桥梁，同时挂载 **Notion MCP** 和 **EdgeEver MCP** 服务，实现全自动的云对云笔记导入。
 
@@ -11,7 +14,7 @@
 #### 步骤 1：在 AI 助手中安装并启用两个 MCP 服务
 
 1. **配置 Notion MCP 服务**：
-   在你的 AI 助手（如 Claude Code/Cursor/Cline 等）中配置好 Notion MCP 服务。配置成功后，AI 助手将获得直接读取你 Notion 页面（Pages）和数据库（Databases）的授权。
+   在你的 AI 助手（如 Claude Code/Cursor/WorkBuddy/Cline 等）中配置好 Notion MCP 服务。配置成功后，AI 助手将获得直接读取你 Notion 页面（Pages）和数据库（Databases）的授权。
    
 2. **配置 EdgeEver MCP 服务**：
    - 登录你的 EdgeEver 实例，点击左下角的 **个人中心** -> **MCP 设置**。

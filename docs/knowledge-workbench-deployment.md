@@ -1,16 +1,18 @@
 # Knowledge Workbench deployment
 
-This fork layers the file-workspace API, atomic note revision checks, attachment metadata endpoints and the standalone Node CLI on upstream EdgeEver 1.74.0 (`3c79414d8094f2cfde9c084a4f48a1d67bec86d6`). It does not add database migrations. The CLI package retains its independent version.
+The current upgrade target for this fork is EdgeEver 2.28.2 (upstream commit `30bd18fdfa48118da265f849b974f9fbd2f0f46f`) with the file-workspace API, atomic note revision checks, attachment metadata endpoints and standalone Node CLI 0.8.0 preserved. The customization layer adds no database migrations; upstream 2.28.2 targets migration `0095`, while the file-workspace contract remains at `protocolVersion: 1`.
 
-Run the manual **Build Knowledge Workbench image** workflow in `a20070322/edgeever`. It checks API types, affected integration tests and the npm package, then builds the Web/API container for Linux amd64. Images use `ghcr.io/a20070322/edgeever:kw-<full-commit-sha>`. The workflow also exports a checksum-protected Docker archive for hosts without registry access. No npm or upstream desktop/mobile Release is published by this workflow.
+`LarryGuan/edgeever` is the only production source. For this first cross-version upgrade, run `./auto/update.sh --build-only`: it checks and synchronizes `main`, tests the standalone CLI, and asks Yunxiao pipeline `5282954` to build a Linux amd64 image in `registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy`, then stops at `deploy=SWITCH_MANUAL`. Only after an isolated same-host validation against a cold copy of production data should the operator use the emitted `./auto/update.sh --resume-run <run-id>` command to release that exact run and update the local CLI/Skill. Do not use the all-in-one `--run` path for this first upgrade.
 
-The upstream auto-sync job is excluded from this fork to prevent unattended replacement of custom code. Upstream upgrades must be reviewed and tested before advancing main. The 1.74.0 reachability probe at `/api/openapi.json` is retained; extension API documentation is in `file-workspace.openapi.json`.
+Yunxiao does not publish npm or upstream desktop/mobile releases. The obsolete fork-only GitHub image workflow has been removed so it cannot conflict with the upstream gate that reserves Actions jobs for the official repository. The upstream auto-sync job explicitly excludes this fork so unattended jobs cannot replace customized code. Future upstream releases must be manually reviewed, tested and merged. The `/api/openapi.json` reachability probe remains; extension API documentation is in `file-workspace.openapi.json`.
 
 Before deployment, back up the full production `/data` volume and Compose configuration outside the repository. Validate the new image against an isolated copy of the previous instance, including existing data readability and file-workspace pull/push/conflicts/attachments. Change only the production service image after validation. Keep the old image and backup available. A failed upgrade should restore the previous image; restore the data backup if a future version changes database state incompatibly. Never run two server instances against the same SQLite volume.
 
 Runtime credentials, databases, note content and backup archives must not enter Git or public build artifacts. This fork's source remains under the upstream AGPL license.
 
-## Verified deployment — 2026-09-16
+## Historical verified deployment — 2026-09-16
+
+The following record belongs to the predecessor `a20070322` baseline. It is retained for audit history and does not claim that the 2.28.2 upgrade has been verified or released.
 
 - Fork: https://github.com/a20070322/edgeever
 - Runtime commit: `a98478bcbb6ba75566471c54b2e297bafc04574a`.

@@ -1,6 +1,6 @@
 import type {
   CompanionAnswer, CompanionMention, CompanionMemory, CompanionQuestion, CompanionSource, CompanionTodo,
-  CompanionToolCall, CompanionTurn, CompanionTurnInput,
+  CompanionToolCall, CompanionTurn, CompanionTurnAttachmentMeta, CompanionTurnInput,
 } from "@edgeever/shared";
 import { refreshCompanionPreferences } from "./companion-learning";
 import { AppError } from "./app-error";
@@ -14,16 +14,29 @@ export type TurnRow = {
   sources_json: string; model: string; input_tokens: number | null; output_tokens: number | null;
   created_at: string; memory_revision: number; use_memory: number; allow_notes: number; locale: string;
   tools_json?: string; todos_json?: string; questions_json?: string; mentions_json?: string;
-  focus_json?: string; answers_json?: string; process_text?: string;
+  focus_json?: string; answers_json?: string; process_text?: string; agent_session_json?: string;
+  attachment_meta_json?: string;
 };
-const bindScope = (scope: CompanionScope) => [scope.workspaceId, scope.ownerId];
-export const mapCompanionTurn = (row: TurnRow): CompanionTurn => ({
-  id: row.id, threadId: row.thread_id, message: row.message, response: row.response, process: row.process_text ?? "",
-  status: row.status, sources: parseJsonArray<CompanionSource>(row.sources_json),
-  tools: parseJsonArray<CompanionToolCall>(row.tools_json), todos: parseJsonArray<CompanionTodo>(row.todos_json),
-  questions: parseJsonArray<CompanionQuestion>(row.questions_json), mentions: parseJsonArray<CompanionMention>(row.mentions_json),
-  model: row.model, inputTokens: row.input_tokens, outputTokens: row.output_tokens, createdAt: row.created_at,
+export const COMPANION_TURN_LEASE_MS = 180_000;
+export const companionTurnLease = () => new Date(Date.now() + COMPANION_TURN_LEASE_MS).toISOString();
+export const turnInputFromRow = (row: TurnRow): CompanionTurnInput => ({
+  id: row.id, threadId: row.thread_id, message: row.message, useMemory: row.use_memory === 1,
+  allowNotes: row.allow_notes === 1, allowWrites: true, locale: row.locale as CompanionTurnInput["locale"],
+  mentions: parseJsonArray(row.mentions_json),
+  focus: Object.keys(turnFocus(row)).length ? turnFocus(row) : undefined,
 });
+const bindScope = (scope: CompanionScope) => [scope.workspaceId, scope.ownerId];
+export const mapCompanionTurn = (row: TurnRow): CompanionTurn => {
+  const attachments = parseJsonArray<CompanionTurnAttachmentMeta>(row.attachment_meta_json);
+  return {
+    id: row.id, threadId: row.thread_id, message: row.message, response: row.response, process: row.process_text ?? "",
+    status: row.status, sources: parseJsonArray<CompanionSource>(row.sources_json),
+    tools: parseJsonArray<CompanionToolCall>(row.tools_json), todos: parseJsonArray<CompanionTodo>(row.todos_json),
+    questions: parseJsonArray<CompanionQuestion>(row.questions_json), mentions: parseJsonArray<CompanionMention>(row.mentions_json),
+    ...(attachments.length ? { attachments } : {}),
+    model: row.model, inputTokens: row.input_tokens, outputTokens: row.output_tokens, createdAt: row.created_at,
+  };
+};
 export const turnFocus = (row: TurnRow) => parseJsonObject<NonNullable<CompanionTurnInput["focus"]>>(row.focus_json, {});
 export const turnAnswers = (row: TurnRow) => parseJsonArray<CompanionAnswer>(row.answers_json);
 export const ensureCompanionState = async (db: DatabaseAdapter, scope: CompanionScope) => {
@@ -166,7 +179,7 @@ export const beginCompanionTurn = async (db: DatabaseAdapter, scope: CompanionSc
       status, model, use_memory, allow_notes, locale, created_at, expires_at, mentions_json, focus_json)
       SELECT ?, ?, ?, ?, memory_revision, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ? FROM companion_state WHERE workspace_id = ? AND owner_id = ?`)
       .bind(input.id, ...bindScope(scope), input.threadId, input.message, model, Number(input.useMemory), Number(input.allowNotes), input.locale,
-        new Date().toISOString(), new Date(Date.now() + 90_000).toISOString(),
+        new Date().toISOString(), companionTurnLease(),
         JSON.stringify(input.mentions ?? []), JSON.stringify(input.focus ?? {}), ...bindScope(scope)).run();
   } catch (error) {
     if (/unique|constraint/i.test(String(error))) throw new AppError("companion_busy", "A conversation is already running or this request was already submitted. Refresh to recover its result.", 409);
@@ -177,14 +190,15 @@ export const beginCompanionTurn = async (db: DatabaseAdapter, scope: CompanionSc
 
 export type CompanionTurnCheckpoint = {
   tools?: CompanionToolCall[]; todos?: CompanionTodo[]; questions?: CompanionQuestion[]; answers?: CompanionAnswer[];
-  process?: string;
+  process?: string; session?: Record<string, unknown>;
 };
 export const checkpointCompanionTurn = async (db: DatabaseAdapter, scope: CompanionScope, row: TurnRow,
   response: string, sources: CompanionSource[], status: CompanionTurn["status"], usage?: { inputTokens?: number; outputTokens?: number },
   extras?: CompanionTurnCheckpoint) => {
   const result = await db.prepare(`UPDATE companion_turns SET response = ?, sources_json = ?, status = ?, input_tokens = ?, output_tokens = ?,
       tools_json = COALESCE(?, tools_json), todos_json = COALESCE(?, todos_json), questions_json = COALESCE(?, questions_json),
-      answers_json = COALESCE(?, answers_json), process_text = COALESCE(?, process_text)
+      answers_json = COALESCE(?, answers_json), process_text = COALESCE(?, process_text),
+      agent_session_json = COALESCE(?, agent_session_json), expires_at = COALESCE(?, expires_at)
     WHERE workspace_id = ? AND owner_id = ? AND id = ? AND status = 'running'
       AND memory_revision = (SELECT memory_revision FROM companion_state WHERE workspace_id = ? AND owner_id = ?)`)
     .bind(response, JSON.stringify(sources), status, usage?.inputTokens ?? null, usage?.outputTokens ?? null,
@@ -193,6 +207,8 @@ export const checkpointCompanionTurn = async (db: DatabaseAdapter, scope: Compan
       extras?.questions ? JSON.stringify(compactCompanionQuestions(extras.questions)) : null,
       extras?.answers ? JSON.stringify(extras.answers.slice(0, 3)) : null,
       extras?.process != null ? extras.process : null,
+      extras?.session ? JSON.stringify(extras.session) : null,
+      status === "running" ? companionTurnLease() : null,
       ...bindScope(scope), row.id, ...bindScope(scope)).run();
   if (Number(result.meta.changes) !== 1) throw new AppError("companion_context_changed", "Memory or conversation changed. Start a new request.", 409);
 };
@@ -201,9 +217,11 @@ export const resumeCompanionTurn = async (db: DatabaseAdapter, scope: CompanionS
   await listCompanionTurns(db, scope);
   const row = await getCompanionTurn(db, scope, id);
   if (!row || row.status !== "interrupted") throw new AppError("companion_resume_unavailable", "This request cannot be continued.", 409);
-  const result = await db.prepare(`UPDATE companion_turns SET status = 'running', expires_at = ?, answers_json = COALESCE(?, answers_json)
+  // Answered questions are resolved; keeping them would end the resumed run as interrupted again.
+  const result = await db.prepare(`UPDATE companion_turns SET status = 'running', expires_at = ?, answers_json = COALESCE(?, answers_json),
+      questions_json = '[]'
     WHERE workspace_id = ? AND owner_id = ? AND id = ? AND status = 'interrupted'`).bind(
-    new Date(Date.now() + 90_000).toISOString(), answers ? JSON.stringify(answers.slice(0, 3)) : null, ...bindScope(scope), id).run();
+    companionTurnLease(), answers ? JSON.stringify(answers.slice(0, 3)) : null, ...bindScope(scope), id).run();
   if (Number(result.meta.changes) !== 1) throw new AppError("companion_busy", "A conversation is already running or this request was already submitted. Refresh to recover its result.", 409);
   return (await getCompanionTurn(db, scope, id))!;
 };

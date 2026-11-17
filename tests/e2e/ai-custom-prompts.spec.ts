@@ -151,9 +151,9 @@ test.describe("AI custom prompts", () => {
   test("keeps secondary content out of AI integration settings", async ({ page }) => {
     await ensureAuthenticatedPage(page);
     await page.getByRole("button", { name: "个人中心", exact: true }).click();
-    await page.getByRole("button", { name: "AI集成", exact: true }).click();
+    await page.getByRole("button", { name: "模型与代理", exact: true }).click();
 
-    await expect(page.getByRole("heading", { name: "外部 AI 模型", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI 模型服务", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "API Token 与 MCP 配置", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "AI 指令", exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "进阶玩法", exact: true })).toHaveCount(0);
@@ -439,7 +439,7 @@ test.describe("AI custom prompts", () => {
     await page.keyboard.press("Enter");
     const emptyParagraph = editor.locator("p").last();
     await expect(emptyParagraph).toHaveClass(/is-empty/);
-    await expect(emptyParagraph).toHaveAttribute("data-placeholder", "Space 唤起 AI · / 浏览命令 · @ 引用笔记");
+    await expect(emptyParagraph).toHaveAttribute("data-placeholder", "空格唤起 AI · / 命令 · @ 引用");
     const renderedPlaceholder = await emptyParagraph.evaluate((element) => {
       const style = getComputedStyle(element, "::before");
       return {
@@ -448,7 +448,7 @@ test.describe("AI custom prompts", () => {
         visibility: style.visibility,
       };
     });
-    expect(renderedPlaceholder.content).toContain("Space 唤起 AI · / 浏览命令 · @ 引用笔记");
+    expect(renderedPlaceholder.content).toContain("空格唤起 AI · / 命令 · @ 引用");
     expect(renderedPlaceholder.display).not.toBe("none");
     expect(renderedPlaceholder.visibility).not.toBe("hidden");
 
@@ -486,7 +486,7 @@ test.describe("AI custom prompts", () => {
     await focusParagraphEnd(editor);
     await page.keyboard.press("Enter");
     const emptyParagraph = editor.locator("p").last();
-    await expect(emptyParagraph).toHaveAttribute("data-placeholder", "/ 浏览命令 · @ 引用笔记");
+    await expect(emptyParagraph).toHaveAttribute("data-placeholder", "/ 命令 · @ 引用");
 
     await page.keyboard.press("Space");
     await expect(page.getByRole("dialog", { name: "AI 笔记助手" })).toBeHidden();

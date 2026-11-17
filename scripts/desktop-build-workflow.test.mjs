@@ -17,6 +17,12 @@ function step(name) {
 }
 
 describe("desktop release workflow", () => {
+  test("checks archive contents and packaged dependencies before accepting installers", () => {
+    expect(desktopPackageVerifier).toContain("assertDesktopProductionFiles(paths)");
+    expect(desktopPackageVerifier).toContain("verify-desktop-production-runtime.cjs");
+    expect(desktopPackageVerifier).toContain('ELECTRON_RUN_AS_NODE: "1"');
+    expect(desktopPackageVerifier.match(/listAsarFiles\(asarPath, executable\)/g)).toHaveLength(3);
+  });
   test("keeps the installed application and automatic update identity stable", () => {
     expect(desktopBuilderConfig).toContain("appId: org.edgeever.desktop");
     expect(desktopBuilderConfig).toContain([
@@ -28,6 +34,14 @@ describe("desktop release workflow", () => {
     ].join("\n"));
     expect(desktopBuilderConfig).toContain("schemes:\n      - edgeever");
     expect(desktopBuilderConfig).not.toContain("edgeever-app");
+    expect(desktopBuilderConfig).toContain("PlugIns/EdgeEverShare.appex");
+    expect(desktopBuilderConfig).toContain("sign: ./scripts/sign-share-extension.cjs");
+    expect(desktopBuilderConfig).not.toContain("afterSign:");
+    const shareSigner = readFileSync(new URL("../apps/desktop/scripts/sign-share-extension.cjs", import.meta.url), "utf8");
+    expect(shareSigner).toContain("await signApp(opts)");
+    expect(shareSigner).not.toContain("await sign(opts)");
+    expect(shareSigner).toContain('"runtime"');
+    expect(shareSigner).toContain('"--timestamp"');
   });
 
   test("gates Draft release assets on the full project suite in Ubuntu", () => {
@@ -37,8 +51,10 @@ describe("desktop release workflow", () => {
     const releasePlan = mobileWorkflow.indexOf("      - name: Compare with previous formal release");
     expect(regressionTests).toBeGreaterThanOrEqual(0);
     expect(regressionTests).toBeLessThan(releasePlan);
-    expect(workflow).toContain('gh release view "$CURRENT_TAG"');
-    expect(mobileWorkflow).toContain('gh release view "$CURRENT_TAG"');
+    expect(workflow).toContain('gh release view "$CURRENT_TAG" --repo "$GITHUB_REPOSITORY" --json apiUrl --jq .apiUrl');
+    expect(mobileWorkflow).toContain('gh release view "$CURRENT_TAG" --repo "$GITHUB_REPOSITORY" --json apiUrl --jq .apiUrl');
+    expect(workflow).toContain("gh api \"$release_api\" --jq '.assets[].name'");
+    expect(mobileWorkflow).toContain("gh api \"$release_api\" --jq '.assets[].name'");
     expect(workflow).not.toContain('releases/tags/${CURRENT_TAG}');
     expect(mobileWorkflow).not.toContain('releases/tags/${CURRENT_TAG}');
   });
@@ -85,6 +101,17 @@ describe("desktop release workflow", () => {
     expect(step("Verify packaged macOS cross-version startup")).toContain("verify:desktop-cross-version-startup");
     expect(step("Verify packaged macOS first launch")).not.toContain("if: matrix.shared_validation");
     expect(step("Verify packaged macOS private protocol file flows")).toContain("verify:desktop-protocol-e2e");
+    expect(step("Verify packaged macOS note windows")).toContain("verify:desktop-note-window-e2e");
+  });
+
+  test("limits the Apple HTTP/3 workaround to hosted Intel packaging", () => {
+    const workaround = step("Use TCP for Apple notarization tickets on Intel runners");
+    expect(workaround).toContain("if: matrix.arch == 'x64' && runner.environment == 'github-hosted'");
+    expect(workaround).toContain("block return out quick proto udp from any to any port 443");
+    expect(workaround).toContain("sudo pfctl -f -");
+    expect(workaround).toContain("sudo pfctl -E");
+    expect(workflow.indexOf(workaround)).toBeLessThan(workflow.indexOf("      - name: Package desktop installer\n"));
+    expect(workflow).toContain("Verify packaged macOS cross-version startup");
   });
 
   test("reports timings after builds without instrumenting native build steps", () => {
@@ -112,15 +139,21 @@ describe("desktop release workflow", () => {
     expect(workflow).toContain("name: Verify packaged Windows first launch");
     expect(workflow).toContain("verify:packaged-desktop-startup");
     expect(step("Verify packaged Windows private protocol file flows")).toContain("verify:desktop-protocol-e2e");
+    expect(step("Verify packaged Windows note windows")).toContain("verify:desktop-note-window-e2e");
     expect(protocolE2eVerifier).toContain('origin !== "edgeever-app://app"');
     expect(protocolE2eVerifier).toContain('fetch("edgeever-staged://" + pending.id)');
     expect(protocolE2eVerifier).toContain('const url = "edgeever-resource://resource/${cachedResourceId}"');
     expect(protocolE2eVerifier).toContain('DOM.setFileInputFiles');
+    expect(protocolE2eVerifier).toContain("renderer.bootstrap-ready");
+    expect(protocolE2eVerifier).toContain("objectId");
+    expect(protocolE2eVerifier).not.toContain("documentNode.root.nodeId");
     expect(protocolE2eVerifier).toContain('Browser.setDownloadBehavior');
     expect(packagedStartupVerifier).toContain('new Set(["renderer.origin-ready", "sidecar.ready", "renderer.bootstrap-ready"])');
     expect(packagedStartupVerifier).toContain('"renderer.origin-ready"');
     expect(packagedStartupVerifier).toContain('startsWith("edgeever-app://app/")');
     expect(desktopPackageVerifier).toContain("isVisualCppRuntimeDll");
+    expect(desktopPackageVerifier).toContain("EdgeEverShare.appex");
+    expect(desktopPackageVerifier).toContain("com\\.apple\\.share-services");
     expect(cargoConfig).toContain('target.x86_64-pc-windows-msvc');
     expect(cargoConfig).toContain('target-feature=+crt-static');
     expect(desktopBuilderConfig).toContain([
@@ -152,6 +185,7 @@ describe("desktop release workflow", () => {
     expect(workflow).toContain("name: Verify packaged Linux first launch");
     expect(workflow).toContain("xvfb-run -a bun run verify:packaged-desktop-startup");
     expect(step("Verify packaged Linux private protocol file flows")).toContain("xvfb-run -a bun run verify:desktop-protocol-e2e");
+    expect(step("Verify packaged Linux note windows")).toContain("xvfb-run -a bun run verify:desktop-note-window-e2e");
     expect(workflow).toContain("SHA256SUMS-linux.txt");
     expect(workflow).toContain("latest-linux.yml");
     expect(workflow).toContain("verify-linux-update-release.mjs");

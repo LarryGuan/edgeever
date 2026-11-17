@@ -54,6 +54,12 @@ describe("markdown theme contracts", () => {
     expect(editorSource).toContain("xcodeLightInit({ styles: lightMarkdownHighlightStyles })");
   });
 
+  test("markdown source mode does not highlight other occurrences of the current selection", () => {
+    const editorSource = readFileSync(new URL("../components/editor/MarkdownSourceEditor.tsx", import.meta.url), "utf8");
+    expect(editorSource).toContain("highlightSelectionMatches: false");
+    expect(editorSource).not.toContain("highlightSelectionMatches: true");
+  });
+
   test("the editor toolbar can switch Markdown source themes", () => {
     const toolbar = readFileSync(new URL("../components/EditorToolbar.tsx", import.meta.url), "utf8");
     expect(toolbar).toContain("useMarkdownTheme");
@@ -63,12 +69,16 @@ describe("markdown theme contracts", () => {
     expect(toolbar).not.toContain('t("editorToolbar.markdownSource")');
   });
 
-  test("the rich-text toolbar can switch editor themes without leaving the note", () => {
+  test("the rich-text toolbar keeps block styles and no longer switches editor themes", () => {
     const toolbar = readFileSync(new URL("../components/EditorToolbar.tsx", import.meta.url), "utf8");
-    expect(toolbar).toContain("useEditorTheme");
-    expect(toolbar).toContain("setEditorTheme");
-    expect(toolbar).toContain('t("editorToolbar.editorTheme")');
-    expect(toolbar).toContain("namedEditorThemes");
+    expect(toolbar).not.toContain("useEditorTheme");
+    expect(toolbar).not.toContain("setEditorTheme");
+    expect(toolbar).not.toContain('t("editorToolbar.editorTheme")');
+    expect(toolbar).not.toContain("namedEditorThemes");
+    expect(toolbar).toContain('t("editorToolbar.blockStyle")');
+    expect(toolbar).toContain("<Heading");
+    expect(toolbar).toContain('markdownMode ? <Palette className="h-4 w-4" /> : <Heading className="h-4 w-4" />');
+    expect(toolbar).toContain("EDITOR_HEADING_LEVELS");
   });
 
   test("phone preview is toggled from the note header instead of the format toolbar", () => {

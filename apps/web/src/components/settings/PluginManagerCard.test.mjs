@@ -19,6 +19,12 @@ describe("plugin manager card layout", () => {
     expect(catalogCard).toContain("commands.filter(isPluginCardCommand)");
   });
 
+  test("does not present informational capability declarations as plugin permissions", () => {
+    expect(source).not.toContain("plugins.details.permissions");
+    expect(source).not.toContain("manifest.permissions.map");
+    expect(catalogCard).not.toContain("manifest.permissions");
+  });
+
   test("uses GitHub icon links for marketplace and installed extension repositories", () => {
     expect(catalogCard.match(/<GitHubRepositoryLink/g)).toHaveLength(1);
     expect(catalogCard).toContain("showTooltip={false}");
@@ -27,7 +33,7 @@ describe("plugin manager card layout", () => {
 
   test("keeps marketplace description below the title row instead of beside header actions", () => {
     expect(source).toContain("{t(\"plugins.syncDescription\")}");
-    expect(source).toContain('<div className="flex items-center justify-between gap-3">');
+    expect(source).toContain('<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">');
     expect(source).toContain('<p className="text-xs leading-5 text-slate-500">{t("plugins.syncDescription")}</p>');
     expect(source).not.toContain("flex items-start justify-between gap-3");
   });
@@ -47,6 +53,13 @@ describe("plugin manager card layout", () => {
     expect(source).toContain('t("plugins.marketplace.loadFailed"');
     expect(source).toContain("marketplaceQuery.refetch()");
   });
+});
+
+test("shows per-plugin restore errors with a retry instead of an empty installed list", () => {
+  expect(source).toContain("snapshot.catalogErrors.length > 0");
+  expect(source).toContain('t("plugins.restoreFailed")');
+  expect(source).toContain("failure.message");
+  expect(source).toContain("host.syncFromCatalog()");
 });
 
 describe("unified plugin catalog cards", () => {
