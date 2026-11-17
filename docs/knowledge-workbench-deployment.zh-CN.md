@@ -10,6 +10,19 @@
 
 凭据、数据库、笔记正文和备份不得进入 Git 或公开构建产物。Fork 源码继续遵守上游 AGPL 许可证。
 
+## 当前生产部署记录 — 2026-11-17
+
+- 生产提交：`f027935f185d6ca8acafc6a3e5de35a9c812a6a8`，固定上游 `v2.28.2` / `30bd18fdfa48118da265f849b974f9fbd2f0f46f`。
+- 云效运行：`#6`，build 与 deploy 均为 `SUCCESS`。
+- 生产镜像：`registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy:2026-11-17-17-29-48`。
+- 镜像摘要：`sha256:57048895272559869bbe1b38e91fc40153a1c29bd7f818859f91bd04216f4b33`。
+- 隔离验证冷备：`/data/edgeever/backups/20261117T173337+0800-pre-v2.28.2`；隔离实例根目录 `/data/edgeever-staging/20261117T173337+0800-v2.28.2`，验证后已停止。
+- 生产部署冷备：`/data/edgeever/backups/20261117T095441Z-1029770`。
+- Migration：`0050 → 0095`。升级前后 67 篇笔记正文和 42 条资源元数据指纹一致；53 个笔记本、2 个工作区和 2 个用户数量一致。
+- 本机 CLI 与 Claude Skill 均为 `0.8.0`，`~/.agents/skills/edgeever` 仍软链到 Claude Skill。
+- 公网 IP 证书已使用现有 Certbot 续签；未重装 OpenResty。续签服务会临时切换 Mihomo 到 `global/DIRECT`，结束时恢复原网络模式，避免失效代理节点阻断 ACME。
+- 完整命令、测试结果、隔离验证和回退边界记录在 `upstream-upgrade-v2.28.2-plan.zh-CN.md`。
+
 ## 历史部署验证记录 — 2026-09-16
 
 以下记录属于前代 `a20070322` 基线，仅作为审计历史，不代表 2.28.2 升级已经验证或发布。

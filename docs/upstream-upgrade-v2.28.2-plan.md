@@ -288,21 +288,22 @@ flowchart TB
     PROD_OK -->|"No"| RESTORE --> FAILED
 ```
 
-## 11. Execution Record Template
+## 11. Execution Record
 
-Fill these fields only after actual execution. Unexecuted items remain `Pending`.
+These facts come from the actual 2026-11-17 upgrade. Unexecuted items remain explicit and are not inferred from successful gates.
 
 | Item | Record |
 | --- | --- |
-| Merge commit | Pending |
-| Pinned upstream verification | Pending |
-| CLI/Skill version | Planned `0.8.0`; pending |
-| Yunxiao pipelineRunId | Pending |
-| ACR image and digest | Pending |
-| Isolated-validation backup directory | Pending |
-| Production backup directory | Pending |
-| Migration result | Pending |
-| Test and build results | Pending |
-| Production approver and time | Pending |
-| Rollback drill/result | Pending |
-| Unverified platforms | Desktop, Android, iOS, Cloudflare |
+| Merge commit | `f027935f185d6ca8acafc6a3e5de35a9c812a6a8` |
+| Pinned upstream verification | Second parent `30bd18fdfa48118da265f849b974f9fbd2f0f46f`; first parent Larry baseline `f1f40f16987eb4ba04cdcb6ed77184130c2b3112` |
+| CLI/Skill version | Local CLI `0.8.0`; Claude Skill `0.8.0`; `~/.agents/skills/edgeever` still links to `~/.claude/skills/edgeever` |
+| Yunxiao pipelineRunId | `6`; build and deploy both `SUCCESS` |
+| ACR image and digest | `registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy:2026-11-17-17-29-48`; `sha256:57048895272559869bbe1b38e91fc40153a1c29bd7f818859f91bd04216f4b33` |
+| Isolated-validation backup directory | Cold backup `/data/edgeever/backups/20261117T173337+0800-pre-v2.28.2`; actual validation root `/data/edgeever-staging/20261117T173337+0800-v2.28.2`; Compose project `edgeever-v2282-staging`, stopped after validation |
+| Production backup directory | `/data/edgeever/backups/20261117T095441Z-1029770`, containing `.env`, Compose, `image.env`, and complete `data.tgz` |
+| Migration result | Both the production copy and production migrated from `0050` to `0095_publish_animated_images.sql`; migration `0078` intentionally cleared seven legacy built-in notebook colors |
+| Test and build results | Typecheck, mobile typecheck, Web build, and file-workspace typecheck passed; full suite `5875/0`, API integration `17/0`, desktop targeted `24/0` with one Windows-only skip, targeted API/MCP `109/0`, CLI `24/0`; Linux amd64 image, isolated login/Web/CLI/attachment/conflict/GC, and production read-back passed |
+| Production approver and time | The user authorized the upgrade in this conversation; released through `--resume-run 6` at 2026-11-17 17:55 CST |
+| Rollback drill/result | No rollback was executed; old image `2026-09-20-13-59-23`, two complete cold backups, and the old CLI tgz were verified retained; rollback was not needed |
+| Certificate recovery | Renewal failed because the Mihomo `auto` node was unavailable. OpenResty was not reinstalled; the existing Certbot certificate was renewed and a network-state-restoring renewal wrapper was installed |
+| Unverified platforms | Official Desktop, Android, iOS releases, and Cloudflare deployment. This run covered self-hosted Web/API, standalone CLI/Skill, and the Web flow in headless Chrome on macOS |

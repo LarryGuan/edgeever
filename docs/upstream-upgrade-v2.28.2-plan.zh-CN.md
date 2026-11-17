@@ -288,21 +288,22 @@ flowchart TB
     PROD_OK -->|"否"| RESTORE --> FAILED
 ```
 
-## 11. 实施记录模板
+## 11. 实施记录
 
-以下内容仅在实际执行后填写；未执行项保持“待执行”。
+以下记录来自 2026-11-17 的实际升级；未执行项继续明确标注，不能从成功项推断。
 
 | 项目 | 记录 |
 | --- | --- |
-| 合并提交 | 待执行 |
-| 上游目标校验 | 待执行 |
-| CLI/Skill 版本 | 计划 `0.8.0`，待执行 |
-| 云效 pipelineRunId | 待执行 |
-| ACR 镜像与摘要 | 待执行 |
-| 隔离验证备份目录 | 待执行 |
-| 生产备份目录 | 待执行 |
-| Migration 结果 | 待执行 |
-| 测试与构建结果 | 待执行 |
-| 生产放行人和时间 | 待执行 |
-| 回退演练/结果 | 待执行 |
-| 未验证平台 | Desktop、Android、iOS、Cloudflare |
+| 合并提交 | `f027935f185d6ca8acafc6a3e5de35a9c812a6a8` |
+| 上游目标校验 | 第二父提交为 `30bd18fdfa48118da265f849b974f9fbd2f0f46f`；第一父提交为 Larry 基线 `f1f40f16987eb4ba04cdcb6ed77184130c2b3112` |
+| CLI/Skill 版本 | 本机 CLI `0.8.0`；Claude Skill `0.8.0`；`~/.agents/skills/edgeever` 继续软链到 `~/.claude/skills/edgeever` |
+| 云效 pipelineRunId | `6`；build 与 deploy 均为 `SUCCESS` |
+| ACR 镜像与摘要 | `registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy:2026-11-17-17-29-48`；`sha256:57048895272559869bbe1b38e91fc40153a1c29bd7f818859f91bd04216f4b33` |
+| 隔离验证备份目录 | 冷备 `/data/edgeever/backups/20261117T173337+0800-pre-v2.28.2`；实际隔离根目录 `/data/edgeever-staging/20261117T173337+0800-v2.28.2`；Compose project `edgeever-v2282-staging`，验证后已停止 |
+| 生产备份目录 | `/data/edgeever/backups/20261117T095441Z-1029770`，包含 `.env`、Compose、`image.env` 和完整 `data.tgz` |
+| Migration 结果 | 生产副本和生产均从 `0050` 成功迁移到 `0095_publish_animated_images.sql`；Migration `0078` 按设计清除 7 个内置默认笔记本旧颜色 |
+| 测试与构建结果 | typecheck、mobile typecheck、Web build、文件工作区类型检查通过；完整测试 `5875/0`、API 集成 `17/0`、桌面定向 `24/0`（1 个 Windows 专用跳过）；定向 API/MCP `109/0`；CLI `24/0`；Linux amd64 镜像、隔离登录/Web/CLI/附件/冲突/GC 和生产回读通过 |
+| 生产放行人和时间 | 用户在本会话授权升级；2026-11-17 17:55 CST 经 `--resume-run 6` 放行 |
+| 回退演练/结果 | 未实际执行回退；旧镜像 `2026-09-20-13-59-23`、两份完整冷备及旧 CLI tgz 均已确认保留，未发生回退 |
+| 证书恢复 | 续签失败根因为 Mihomo `auto` 节点不可用；未重装 OpenResty，使用现有 Certbot 完成公网 IP 证书续签并加入自动恢复网络状态的续签包装脚本 |
+| 未验证平台 | 官方 Desktop、Android、iOS Release 与 Cloudflare 部署；本次只验证自托管 Web/API、独立 CLI/Skill 和 macOS 上的 headless Chrome Web 流程 |

@@ -10,6 +10,19 @@ Before deployment, back up the full production `/data` volume and Compose config
 
 Runtime credentials, databases, note content and backup archives must not enter Git or public build artifacts. This fork's source remains under the upstream AGPL license.
 
+## Current Production Deployment Record — 2026-11-17
+
+- Production commit: `f027935f185d6ca8acafc6a3e5de35a9c812a6a8`, pinned to upstream `v2.28.2` / `30bd18fdfa48118da265f849b974f9fbd2f0f46f`.
+- Yunxiao run: `#6`; build and deploy both `SUCCESS`.
+- Production image: `registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy:2026-11-17-17-29-48`.
+- Image digest: `sha256:57048895272559869bbe1b38e91fc40153a1c29bd7f818859f91bd04216f4b33`.
+- Isolated-validation cold backup: `/data/edgeever/backups/20261117T173337+0800-pre-v2.28.2`; validation root `/data/edgeever-staging/20261117T173337+0800-v2.28.2`, stopped after validation.
+- Production deployment cold backup: `/data/edgeever/backups/20261117T095441Z-1029770`.
+- Migration: `0050 → 0095`. All 67 note bodies and 42 resource metadata fingerprints match before and after; counts remain 53 notebooks, two workspaces, and two users.
+- The local CLI and Claude Skill are both `0.8.0`; `~/.agents/skills/edgeever` still links to the Claude Skill.
+- The public IP certificate was renewed with the existing Certbot installation; OpenResty was not reinstalled. The renewal service temporarily selects Mihomo `global/DIRECT` and restores the previous network mode afterward so a failed proxy node cannot block ACME.
+- Full commands, gate results, isolated validation, and rollback boundaries are recorded in `upstream-upgrade-v2.28.2-plan.md`.
+
 ## Historical verified deployment — 2026-09-16
 
 The following record belongs to the predecessor `a20070322` baseline. It is retained for audit history and does not claim that the 2.28.2 upgrade has been verified or released.
