@@ -372,22 +372,6 @@ const TokenList = ({ tokens, notebooks, availableScopes, newlyCreatedTokenId, is
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      aria-label={t("mcp.editNotebookScope")}
-                      disabled={token.isRevoked}
-                      onClick={() => onEdit(token)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">{t("mcp.editNotebookScope")}</TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
                       size="sm"
                       variant="outline"
                       className="h-8 gap-1.5 border-slate-200 bg-card px-2.5 text-xs font-normal text-slate-700 hover:bg-slate-50 hover:text-slate-900"
@@ -409,6 +393,22 @@ const TokenList = ({ tokens, notebooks, availableScopes, newlyCreatedTokenId, is
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">{token.token ? t("mcp.copyConfig") : t("mcp.legacyConfigCannotCopy")}</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      aria-label={t("mcp.editNotebookScope")}
+                      disabled={token.isRevoked}
+                      onClick={() => onEdit(token)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t("mcp.editNotebookScope")}</TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
