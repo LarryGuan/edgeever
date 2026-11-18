@@ -163,6 +163,17 @@ export async function sync(root, client, { dryRun = false, pullOnly = false, aut
     for (const [id, entry] of Object.entries(state.entries)) if (!remote.has(id)) results.push({ id, path: entry.path, status: 'outside-snapshot-retained' });
     for (const id of remote.keys()) {
       if (scan.blocked.has(id)) continue;
+      const summary = remote.get(id);
+      if (summary?.document?.storageMode === 'resource') {
+        results.push({
+          id,
+          path: state.entries[id]?.path,
+          status: 'file-note-unsupported',
+          formatKey: summary.document.formatKey,
+          error: 'File notes stay on the server; this CLI version does not materialize or edit their primary binary.',
+        });
+        continue;
+      }
       const { memo } = await client.request(`/api/v1/memos/${encodeURIComponent(id)}`);
       if (!selected.has(memo.notebookId) || memo.isDeleted) continue;
       let entry = state.entries[id];

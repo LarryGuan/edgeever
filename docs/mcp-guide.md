@@ -6,6 +6,8 @@
 
 Open **Profile** → **API / MCP**, create a separate token for each client, then select **Copy MCP config**. Choose **Read-only** for search and summaries or **Full access** if the client needs to create or edit notes. If a token leaks, delete it here and create a replacement.
 
+See the [EdgeEver CLI and Skill User Guide](edgeever-cli-skill-guide.md) for multiple CLI profiles, notebook boundaries, and local workspaces.
+
 Remote clients connect over Streamable HTTP. Use your instance URL followed by `/mcp`, such as `https://notes.example.com/mcp`, and send `Authorization: Bearer <token>`. Check that the copied URL points to your EdgeEver instance.
 
 ### Cursor and other clients that use `mcpServers`

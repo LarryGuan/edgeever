@@ -230,6 +230,19 @@ export const createDesktopRepository = (): EdgeEverRepository => ({
       throw error;
     }
   },
+
+  listMemoResources: async (memoId) => {
+    if (typeof navigator === "undefined" || navigator.onLine) {
+      try {
+        return resolveResourceUrls(await api.listMemoResources(memoId));
+      } catch {
+        // Fall back to the desktop resource index and staged uploads.
+      }
+    }
+    const resources = await resourcesForMemo(memoId);
+    const staged = (await listStagedResources()).filter((resource) => resource.memoId === memoId);
+    return { resources: [...resources, ...staged] };
+  },
   renameResource: async (resourceId, filename) => {
     const result = await api.renameResource(resourceId, filename);
     await request("resource.cache", { resource: result.resource });

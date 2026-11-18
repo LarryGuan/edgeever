@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, type DragEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText, Component, GitFork, PieChart, Table2, Workflow, Star, Check, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
+import { FileDown, FileText, Component, GitFork, PieChart, Table2, Workflow, Star, Check, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
 import { getMemoListTimestamp, type MemoSummary } from "@edgeever/shared";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -90,6 +90,9 @@ export const MemoCard = ({
     ? t(`diagram.${memo.diagramKind === "mind-map" ? "mindMap" : memo.diagramKind}`)
     : null;
   const tableLabel = !diagramLabel && memo.structuredTable ? t("structuredTable.name") : null;
+  const fileLabel = memo.document?.storageMode === "resource"
+    ? (memo.document.formatKey === "generic-file" ? t("fileNote.title") : memo.document.formatKey.toUpperCase())
+    : null;
   const DiagramIcon = memo.diagramKind === "mind-map" ? GitFork : memo.diagramKind === "architecture" ? Component : Workflow;
   const listTimestamp = getMemoListTimestamp(memo, sortMode);
   const listTimestampLabel = formatMemoPreviewDate(
@@ -339,7 +342,9 @@ export const MemoCard = ({
     </time>
   );
   // Compact rows use two lines: title and date, then a one-line summary with tags.
-  const CompactTypeIcon = diagramLabel
+  const CompactTypeIcon = fileLabel
+    ? FileDown
+    : diagramLabel
     ? DiagramIcon
     : tableLabel
       ? Table2
@@ -348,7 +353,9 @@ export const MemoCard = ({
         : memo.infographic
           ? PieChart
           : null;
-  const compactSummary = diagramLabel
+  const compactSummary = fileLabel
+    ? fileLabel
+    : diagramLabel
     ? memo.diagramPreview
       ? t("diagram.listCounts", { nodes: memo.diagramPreview.nodeCount, edges: memo.diagramPreview.edgeCount })
       : diagramLabel
@@ -448,7 +455,12 @@ export const MemoCard = ({
             {memo.isPinned && <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500" />}
             <span className="min-w-0 truncate">{memoTitle}</span>
           </div>
-          {diagramLabel ? (
+          {fileLabel ? (
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{fileLabel}</span>
+            </div>
+          ) : diagramLabel ? (
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                 <Tooltip>

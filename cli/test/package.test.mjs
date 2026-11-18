@@ -27,7 +27,7 @@ test('packed CLI installs independently and supports profiles, HTTP, files and c
     const bin = join(prefix, 'node_modules', 'knowledge-workbench-edgeever-cli', 'bin', 'edgeever.mjs');
     const run = async (...args) => (await exec(process.execPath, [bin, ...args], { cwd: root, env })).stdout;
     assert.match(await run('--help'), /edgeever workspace sync/);
-    assert.equal((await run('--version')).trim(), '0.8.0');
+    assert.equal((await run('--version')).trim(), '0.8.1');
     const installedSkills = JSON.parse(await run('skill', 'install', '--target', 'all'));
     assert.deepEqual(installedSkills.results.map(r => r.status), ['installed', 'installed', 'installed']);
     assert.deepEqual(JSON.parse(await run('skill', 'status')).results.map(r => r.status), ['current', 'current', 'current']);

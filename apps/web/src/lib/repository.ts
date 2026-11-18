@@ -70,6 +70,7 @@ export type EdgeEverRepository = {
   readResource(resourceId: string): Promise<Blob>;
   updateResource(resourceId: string, file: File, expectedContentHash: string): Promise<{ resource: Resource }>;
   listResources(): Promise<{ resources: ResourceListItem[]; summary: ResourceStorageSummary }>;
+  listMemoResources(memoId: string): Promise<{ resources: Resource[] }>;
   renameResource(resourceId: string, filename: string): Promise<{ resource: Resource }>;
   deleteResource(resourceId: string): Promise<{ ok: true }>;
   listTags(): Promise<{ tags: TagSummary[] }>;
@@ -389,6 +390,24 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
     const remote = await api.listResources();
     await replaceLocalResources(scope, remote.resources);
     return remote;
+  },
+  async listMemoResources(memoId) {
+    const local = (await listLocalResources(scope)).resources.filter((resource) => resource.memoId === memoId);
+    if (isOffline()) return { resources: local };
+    try {
+      const remote = await api.listMemoResources(memoId);
+      for (const resource of remote.resources) {
+        await putLocalResource(scope, {
+          ...resource,
+          memoTitle: null,
+          memoExcerpt: null,
+          memoDeleted: false,
+        });
+      }
+      return remote;
+    } catch {
+      return { resources: local };
+    }
   },
   async renameResource(resourceId, filename) {
     if (isOffline() || resourceId.startsWith("local_resource_")) {

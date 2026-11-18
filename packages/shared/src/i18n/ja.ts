@@ -2615,6 +2615,11 @@ export const ja = {
     manualSyncing: "ノートを同期中",
     manualSyncOffline: "オフラインではノートを同期できません",
   },
+  fileNote: {
+    title: "File note", loading: "Loading file…", unavailable: "The primary file is unavailable.", unknownType: "Unknown type",
+    readOnlyDescription: "This file can be downloaded or replaced. Preview and editing are not supported yet.", download: "Download", replace: "Replace file", replacing: "Replacing…",
+    replaceFailed: "The file could not be replaced. Refresh and try again.",
+  },
   memoCard: {
     yesterday: "昨日",
     createdAt: "作成 {{time}}",

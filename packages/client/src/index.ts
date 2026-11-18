@@ -1698,6 +1698,9 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
 
     listResources: () => request<ListResourcesResponse>("/api/v1/resources"),
 
+    listMemoResources: (memoId: string) =>
+      request<{ resources: Resource[] }>(`/api/v1/memos/${encodeURIComponent(memoId)}/resources`),
+
     renameResource: (resourceId: string, filename: string) =>
       request<ResourceResponse>(`/api/v1/resources/${encodeURIComponent(resourceId)}`, {
         method: "PATCH",

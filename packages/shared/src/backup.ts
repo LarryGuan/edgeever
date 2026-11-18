@@ -135,6 +135,8 @@ export const JsonBackupMemoSchema = z.object({
     memoId: z.string().trim().min(1),
     originalMemoId: z.string().nullable(),
     kind: z.enum(["image", "attachment"]),
+    role: z.enum(["attachment", "primary"]).optional(),
+    formatKey: z.string().trim().min(1).max(80).nullable().optional(),
     mimeType: z.string().nullable(),
     filename: z.string().nullable(),
     byteSize: z.number().int().min(0),

@@ -12,6 +12,7 @@ import {
   getInfographicSummary,
   getPosterSummary,
   getTableSummary,
+  resolveDocumentDescriptor,
   getNotebookDescendantIds,
   resolveMemoContentDoc,
   resolveMergedMemoTitle,
@@ -88,6 +89,7 @@ const toSummary = (memo: MemoDetail): MemoSummary => ({
   ...getInfographicSummary(memo.contentMarkdown),
   ...getPosterSummary(memo.contentMarkdown),
   ...getTableSummary(memo.contentMarkdown),
+  document: resolveDocumentDescriptor(memo.contentMarkdown),
   tags: memo.tags,
   isPinned: memo.isPinned,
   isArchived: memo.isArchived,
@@ -336,6 +338,7 @@ export const createLocalMemo = async (
     sourceMemoIds: [],
     mergeSourceCount: 0,
     mergedIntoMemoId: null,
+    document: resolveDocumentDescriptor(contentMarkdown),
   };
   await putLocalMemo(scope, memo);
   return memo;
@@ -436,13 +439,15 @@ export const putLocalMemoUpdate = async (
   input: { title: string; contentJson: TiptapDoc; contentMarkdown?: string; tags: string[] },
 ) => {
   const contentText = docToText(input.contentJson);
+  const contentMarkdown = input.contentMarkdown ?? docToMarkdown(input.contentJson);
   const updatedMemo: MemoDetail = {
     ...memo,
     title: input.title.trim() || null,
     excerpt: createExcerpt(contentText),
     tags: input.tags,
     contentJson: input.contentJson,
-    contentMarkdown: input.contentMarkdown ?? docToMarkdown(input.contentJson),
+    contentMarkdown,
+    document: resolveDocumentDescriptor(contentMarkdown),
     contentText,
     updatedAt: new Date().toISOString(),
   };

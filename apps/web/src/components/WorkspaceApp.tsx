@@ -162,6 +162,7 @@ const DiagramEditorPane = lazy(() => import("./DiagramEditorPane"));
 const TableEditorPane = lazy(() => import("./TableEditorPane"));
 const PosterEditorPane = lazy(() => import("./PosterEditorPane"));
 const InfographicEditorPane = lazy(() => import("./InfographicEditorPane"));
+const FileDocumentPane = lazy(() => import("./FileDocumentPane"));
 const AssetsPane = lazy(() => import("./AssetsPane").then((module) => ({ default: module.AssetsPane })));
 const SettingsPane = lazy(() => import("./SettingsPane").then((module) => ({ default: module.SettingsPane })));
 const PluginMarketplacePane = lazy(() => import("./PluginMarketplacePane").then((module) => ({ default: module.PluginMarketplacePane })));
@@ -2155,6 +2156,7 @@ export const WorkspaceApp = ({
 
   const handleImportMarkdownFiles = async (files: File[]) => {
     const targetNotebookId = createMemoNotebookId;
+    let countedSharedFileImport = false;
 
     if (!targetNotebookId || memoView === "trash") return;
     if (files.length !== 1) {
@@ -2166,30 +2168,64 @@ export const WorkspaceApp = ({
     }
 
     const [file] = files;
-    if (!isMarkdownFile(file)) {
-      setAppNoticeDialog({
-        title: t("memoList.importMarkdownFailedTitle"),
-        description: t("memoList.importMarkdownUnsupported"),
-      });
-      return;
-    }
 
     try {
-      const payload = await readMarkdownFile(file);
       setTemplatesOpen(false);
       setMobileBottomNavActive("home");
       creatingMemoSelectionRef.current = true;
-      await createMemoMutation.mutateAsync({
+      if (isMarkdownFile(file)) {
+        const payload = await readMarkdownFile(file);
+        await createMemoMutation.mutateAsync({
+          notebookId: targetNotebookId,
+          title: payload.title,
+          contentMarkdown: payload.contentMarkdown,
+          tags: payload.tags ?? [],
+        });
+        return;
+      }
+
+      if (isBrowserOffline()) throw new Error("File notes require a connection for the initial upload.");
+      setSharedFileImportsInProgress((count) => count + 1);
+      countedSharedFileImport = true;
+      const memo = await createSharedFileMemo({
         notebookId: targetNotebookId,
-        title: payload.title,
-        contentMarkdown: payload.contentMarkdown,
-        tags: payload.tags ?? [],
+        filename: file.name,
+        file,
+        createMemo: (input) => api.createMemo(input),
+        prepareFile: async (input) => (imageCompressionEnabled && input.type.startsWith("image/")
+          ? (await compressImageForUpload(input)).file
+          : input),
+        uploadResource: async (memoId, uploadFile) => {
+          const { resource } = await api.uploadMemoResource(memoId, uploadFile);
+          return { url: resource.url, filename: resource.filename };
+        },
+        updateMemo: async (created, content) => {
+          const { editSession } = await api.createMemoEditSession(created.id);
+          return api.updateMemo(created.id, {
+            expectedRevision: created.revision,
+            expectedContentHash: created.contentHash,
+            editSessionId: editSession.id,
+            title: created.title ?? sharedFileTitle(file.name),
+            contentJson: content.contentJson,
+            contentMarkdown: content.contentMarkdown,
+            tags: created.tags,
+          });
+        },
+        deleteMemo: (memoId) => api.deleteMemo(memoId, { permanent: true }),
       });
+      await putLocalMemo(localDataScope, memo);
+      notifyRepositoryMutation(localDataScope, { type: "note.created", note: memo });
+      revealCreatedMemo(memo);
     } catch {
+      creatingMemoSelectionRef.current = false;
       setAppNoticeDialog({
         title: t("memoList.importMarkdownFailedTitle"),
         description: t("memoList.importMarkdownReadFailed"),
       });
+    } finally {
+      if (countedSharedFileImport) {
+        setSharedFileImportsInProgress((count) => Math.max(0, count - 1));
+      }
     }
   };
 
@@ -3787,7 +3823,18 @@ export const WorkspaceApp = ({
                         setActivePane("memos");
                       }}
                     >
-                      {selectedMemo && selectedDiagram ? (
+                      {selectedMemo && selectedMemo.document?.storageMode === "resource" && memoView !== "trash" ? (
+                        <FileDocumentPane
+                          memo={selectedMemo}
+                          repository={repository}
+                          readOnly={selectedMemo.isDeleted}
+                          onBackToList={() => {
+                            clearPendingCreatedMemo();
+                            setSelectedMemoId(null);
+                            setActivePane("memos");
+                          }}
+                        />
+                      ) : selectedMemo && selectedDiagram ? (
                         <DiagramEditorPane
                           memo={selectedMemo}
                           notebooks={notebooks}

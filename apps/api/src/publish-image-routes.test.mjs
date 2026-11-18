@@ -30,6 +30,11 @@ const fixture = async ({ legacyPublication = false } = {}) => {
     VALUES (?, 'ws_publish', 'legacy-hash', 'legacy/published.png', 'builtin', 'image/png', ?, '2026-11-15')`)
     .run('L'.repeat(43), png.byteLength);
   sqlite.exec(readFileSync("migrations/0095_publish_animated_images.sql", "utf8"));
+  // Keep the explicit 0094 -> 0095 assertions above, then bring the fixture to
+  // the current schema before registering routes backed by current services.
+  for (const path of globSync("migrations/*.sql").sort()) {
+    if (path > "migrations/0095_publish_animated_images.sql") sqlite.exec(readFileSync(path, "utf8"));
+  }
   const directory = await mkdtemp(`${tmpdir()}/edgeever-publish-`);
   fixtures.push({ sqlite, directory });
   const storage = createSelfHostedStorageAdapter(sqlite, directory);

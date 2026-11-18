@@ -3,6 +3,7 @@ import type { TiptapDoc } from "./content";
 import type { AiAction, AiPromptParameterKind, AiPromptResultMode } from "./ai-assistant";
 import type { DiagramKind, DiagramSummaryPreview } from "./diagram";
 import type { TableSummaryPreview } from "./table";
+import type { DocumentDescriptor } from "./document-presentation";
 
 export type NoteCreateKind = DiagramKind | "infographic" | "table" | "poster";
 
@@ -38,6 +39,7 @@ export type MemoSummary = {
   infographic?: boolean;
   poster?: boolean;
   videoNote?: boolean;
+  document?: DocumentDescriptor;
   tags: string[];
   isPinned: boolean;
   isArchived: boolean;
@@ -145,12 +147,15 @@ export type MemoRevision = {
 };
 
 export type ResourceKind = "image" | "attachment";
+export type ResourceRole = "attachment" | "primary";
 
 export type Resource = {
   id: string;
   memoId: string;
   originalMemoId: string | null;
   kind: ResourceKind;
+  role?: ResourceRole;
+  formatKey?: string | null;
   mimeType: string | null;
   filename: string | null;
   byteSize: number;

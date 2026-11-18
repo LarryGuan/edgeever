@@ -30,6 +30,8 @@ export type ResourceRow = {
   object_key: string;
   storage_config_id: string;
   kind: "image" | "attachment";
+  role?: "attachment" | "primary";
+  format_key?: string | null;
   mime_type: string | null;
   filename: string | null;
   byte_size: number;
@@ -69,6 +71,8 @@ export const mapResource = (row: ResourceRow): Resource => ({
   memoId: row.memo_id,
   originalMemoId: row.original_memo_id,
   kind: row.kind,
+  role: row.role ?? "attachment",
+  formatKey: row.format_key ?? null,
   mimeType: row.mime_type,
   filename: row.filename,
   byteSize: row.byte_size,
@@ -200,7 +204,7 @@ export const getResourceRow = async (
 ): Promise<ResourceRow | null> =>
   database
     .prepare(
-      `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.mime_type,
+      `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.role, r.format_key, r.mime_type,
               r.filename, r.byte_size, r.sha256, r.width, r.height, r.created_at, r.updated_at, r.is_deleted
        FROM resources r
        INNER JOIN memos m ON m.id = r.memo_id
@@ -216,7 +220,7 @@ export const listResourcesForMemo = async (
 ): Promise<Resource[]> => {
   const rows = await database
     .prepare(
-      `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.mime_type,
+      `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.role, r.format_key, r.mime_type,
               r.filename, r.byte_size, r.sha256, r.width, r.height, r.created_at, r.updated_at
        FROM resources r
        INNER JOIN memos m ON m.id = r.memo_id
@@ -236,7 +240,7 @@ export const listResourcesForMcp = async (
 ) => {
   const [rows, stats] = await Promise.all([
     database.prepare(
-      `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind,
+      `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.role, r.format_key,
               r.mime_type, r.filename, r.byte_size, r.sha256, r.width, r.height,
               r.created_at, r.updated_at, m.title AS memo_title, m.excerpt AS memo_excerpt,
               m.is_deleted AS memo_is_deleted
@@ -462,6 +466,10 @@ export const replaceResourceContent = async (
       throw new AppError("resource_conflict", "The resource changed while it was being saved.", 409);
     }
 
+    await context.env.storage.db.prepare(
+      `UPDATE memos SET updated_at = ?
+       WHERE id = ? AND workspace_id = ? AND ? = 'primary'`,
+    ).bind(now, current.memo_id, workspaceId, current.role ?? "attachment").run();
     await auditStatement(
       context.env.storage.db,
       input.actor.actorType,
@@ -477,6 +485,7 @@ export const replaceResourceContent = async (
         mimeType,
       },
     ).run();
+
     await source.store.delete(current.object_key).catch(() => undefined);
     return mapResource(updated);
   } catch (error) {

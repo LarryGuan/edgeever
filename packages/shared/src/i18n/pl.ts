@@ -2615,6 +2615,11 @@ export const pl = {
     manualSyncing: "Synchronizowanie notatek",
     manualSyncOffline: "Nie można synchronizować notatek w trybie offline",
   },
+  fileNote: {
+    title: "File note", loading: "Loading file…", unavailable: "The primary file is unavailable.", unknownType: "Unknown type",
+    readOnlyDescription: "This file can be downloaded or replaced. Preview and editing are not supported yet.", download: "Download", replace: "Replace file", replacing: "Replacing…",
+    replaceFailed: "The file could not be replaced. Refresh and try again.",
+  },
   memoCard: {
     yesterday: "Wczoraj",
     createdAt: "Utworzono {{time}}",

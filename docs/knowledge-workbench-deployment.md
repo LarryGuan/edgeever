@@ -1,6 +1,6 @@
 # Knowledge Workbench deployment
 
-The current upgrade target for this fork is EdgeEver 2.28.2 (upstream commit `30bd18fdfa48118da265f849b974f9fbd2f0f46f`) with the file-workspace API, atomic note revision checks, attachment metadata endpoints and standalone Node CLI 0.8.0 preserved. The customization layer adds no database migrations; upstream 2.28.2 targets migration `0095`, while the file-workspace contract remains at `protocolVersion: 1`.
+The current baseline for this fork is EdgeEver 2.28.2 (upstream commit `30bd18fdfa48118da265f849b974f9fbd2f0f46f`) with the file-workspace API, atomic note revision checks, attachment metadata endpoints and standalone Node CLI 0.8.1 preserved. Larry's customization migrations now reach `0098`, adding primary-resource identity and format metadata for first-class file notes; the file-workspace contract remains at `protocolVersion: 1`.
 
 `LarryGuan/edgeever` is the only production source. For this first cross-version upgrade, run `./auto/update.sh --build-only`: it checks and synchronizes `main`, tests the standalone CLI, and asks Yunxiao pipeline `5282954` to build a Linux amd64 image in `registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy`, then stops at `deploy=SWITCH_MANUAL`. Only after an isolated same-host validation against a cold copy of production data should the operator use the emitted `./auto/update.sh --resume-run <run-id>` command to release that exact run and update the local CLI/Skill. Do not use the all-in-one `--run` path for this first upgrade.
 

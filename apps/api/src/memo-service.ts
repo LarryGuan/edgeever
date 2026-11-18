@@ -13,8 +13,10 @@ import {
   SUSPICIOUS_MEMO_OVERWRITE_ERROR,
   SUSPICIOUS_MEMO_OVERWRITE_MESSAGE,
   isMemoEditBindingValid,
+  fileDocumentResourceId,
   listTableAttachmentResourceIds,
   normalizeTags,
+  parseFileDocument,
   parseTableDocument,
   type MemoDetail,
   type MemoEditSession,
@@ -1404,6 +1406,34 @@ export const updateMemoRecord = async (
   const tags = input.tags === undefined ? parseJsonArray(current.tags_json) : normalizeTags(input.tags);
   const excerpt = createExcerpt(contentText);
   const notebookId = input.notebookId ?? current.notebook_id;
+  const currentFile = parseFileDocument(current.content_markdown);
+  const nextFile = parseFileDocument(contentMarkdown);
+  if (currentFile && !nextFile) {
+    return { error: "file_document_update_required", message: "File source must be edited on a supported client.", status: 409 };
+  }
+  const primaryResourceStatements: PreparedStatementAdapter[] = [];
+  if (nextFile) {
+    const primaryResourceId = fileDocumentResourceId(nextFile);
+    const ownedResource = primaryResourceId
+      ? await db.prepare(
+        `SELECT r.id FROM resources r INNER JOIN memos m ON m.id = r.memo_id
+         WHERE r.id = ? AND r.memo_id = ? AND m.workspace_id = ? AND r.is_deleted = 0`,
+      ).bind(primaryResourceId, id, workspaceId).first<{ id: string }>()
+      : null;
+    if (!ownedResource) {
+      return { error: "invalid_file_document", message: "File document source must reference an active resource owned by this note.", status: 400 };
+    }
+    primaryResourceStatements.push(
+      db.prepare(
+        `UPDATE resources SET role = 'attachment', format_key = NULL, updated_at = ?
+         WHERE memo_id = ? AND role = 'primary' AND id <> ?`,
+      ).bind(updatedAt, id, primaryResourceId),
+      db.prepare(
+        `UPDATE resources SET role = 'primary', format_key = ?, updated_at = ?
+         WHERE id = ? AND memo_id = ? AND is_deleted = 0`,
+      ).bind(nextFile.formatKey, updatedAt, primaryResourceId, id),
+    );
+  }
   if (hasPosterDocumentMarker(current.content_markdown) && !parsePosterDocument(contentMarkdown)) {
     return { error: "poster_update_required", message: "Poster source must be edited on a supported client.", status: 409 };
   }
@@ -1448,7 +1478,11 @@ export const updateMemoRecord = async (
     && input.updatedAt === undefined;
 
   if (unchanged) {
-    if (commit) await db.batch([...commit.before, ...commit.after(id)]);
+    if (primaryResourceStatements.length || commit) await db.batch([
+      ...primaryResourceStatements,
+      ...(commit?.before ?? []),
+      ...(commit?.after(id) ?? []),
+    ]);
     return { memo: mapMemoDetail(current) };
   }
 
@@ -1498,6 +1532,7 @@ export const updateMemoRecord = async (
         .bind(current.revision, id, workspaceId, id),
       ...(commit?.before ?? []),
       ...revisionStatements,
+      ...primaryResourceStatements,
       ...releaseResourceStatements,
       db
         .prepare(

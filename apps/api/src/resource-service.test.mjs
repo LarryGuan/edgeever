@@ -39,6 +39,8 @@ describe("resource service contracts", () => {
       memoId: "memo_1",
       originalMemoId: null,
       kind: "image",
+      role: "attachment",
+      formatKey: null,
       mimeType: "image/png",
       filename: "diagram.png",
       byteSize: 128,

@@ -1,6 +1,6 @@
 # 知识工作台部署
 
-本 Fork 的当前升级目标为 EdgeEver 2.28.2（上游提交 `30bd18fdfa48118da265f849b974f9fbd2f0f46f`），并保留工作目录 API、笔记原子版本检查、附件元数据接口及独立 Node CLI 0.8.0。定制层不新增数据库迁移；2.28.2 上游迁移目标为 `0095`，文件工作区协议继续使用 `protocolVersion: 1`。
+本 Fork 的当前基线为 EdgeEver 2.28.2（上游提交 `30bd18fdfa48118da265f849b974f9fbd2f0f46f`），并保留工作目录 API、笔记原子版本检查、附件元数据接口及独立 Node CLI 0.8.1。Larry 定制迁移当前到 `0098`，新增一等文件笔记的主资源身份与格式标识；文件工作区协议继续使用 `protocolVersion: 1`。
 
 正式发布源仅为 `LarryGuan/edgeever`。首次跨版本升级先运行 `./auto/update.sh --build-only`：脚本检查并同步 `main`、测试独立 CLI、触发云效流水线 `5282954` 构建 Linux amd64 镜像到 `registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy`，然后停在 `deploy=SWITCH_MANUAL`。生产数据冷副本的同机隔离验证通过后，才使用脚本输出的 `./auto/update.sh --resume-run <运行号>` 放行同一次运行，并更新本机 CLI/Skill。首次升级禁止直接使用一体化 `--run`。
 

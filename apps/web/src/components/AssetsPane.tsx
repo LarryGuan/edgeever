@@ -319,7 +319,7 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
                   key={resource.id}
                   className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md"
                 >
-                  <ButtonTooltip title={t("assets.deleteAria", { filename: resource.filename || resource.id })}>
+                  {resource.role !== "primary" ? <ButtonTooltip title={t("assets.deleteAria", { filename: resource.filename || resource.id })}>
                     <Button
                       type="button"
                       size="icon"
@@ -330,7 +330,7 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </ButtonTooltip>
+                  </ButtonTooltip> : null}
                   {/* Thumbnail area */}
                   <div
                     role="button"
@@ -460,7 +460,7 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
                   </div>
 
                   {/* Right Actions */}
-                  <ButtonTooltip title={t("assets.deleteAria", { filename: resource.filename || resource.id })}>
+                  {resource.role !== "primary" ? <ButtonTooltip title={t("assets.deleteAria", { filename: resource.filename || resource.id })}>
                     <Button
                       type="button"
                       size="icon"
@@ -471,7 +471,7 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </ButtonTooltip>
+                  </ButtonTooltip> : null}
                   <ButtonTooltip title={t("assets.openInNewWindow")}>
                     <a
                       href={resource.url}

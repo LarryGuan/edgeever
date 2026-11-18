@@ -170,7 +170,7 @@ const readBackupRelations = async (database: DatabaseAdapter, memoIds: string[])
   const placeholders = memoIds.map(() => "?").join(", ");
   const [resources, revisions] = await Promise.all([
     database.prepare(
-      `SELECT id, memo_id, original_memo_id, bucket_name, object_key, storage_config_id, kind, mime_type,
+      `SELECT id, memo_id, original_memo_id, bucket_name, object_key, storage_config_id, kind, role, format_key, mime_type,
               filename, byte_size, sha256, width, height, created_at, updated_at
        FROM resources WHERE is_deleted = 0 AND memo_id IN (${placeholders})
        ORDER BY memo_id ASC, created_at ASC, id ASC`,
@@ -380,7 +380,7 @@ export const registerBackupRoutes = (
     if (memoIds.length > 0) {
       const placeholders = memoIds.map(() => "?").join(", ");
       const resourceRows = await context.env.storage.db.prepare(
-        `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.mime_type,
+        `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.role, r.format_key, r.mime_type,
                 r.filename, r.byte_size, r.sha256, r.width, r.height, r.created_at, r.updated_at
          FROM resources r
          WHERE r.is_deleted = 0 AND r.memo_id IN (${placeholders})
@@ -418,7 +418,7 @@ export const registerBackupRoutes = (
       const placeholders = memoIds.map(() => "?").join(", ");
       const [resourceRows, revisionRows] = await Promise.all([
         context.env.storage.db.prepare(
-          `SELECT id, memo_id, original_memo_id, bucket_name, object_key, storage_config_id, kind, mime_type,
+          `SELECT id, memo_id, original_memo_id, bucket_name, object_key, storage_config_id, kind, role, format_key, mime_type,
                   filename, byte_size, sha256, width, height, created_at, updated_at
            FROM resources
            WHERE is_deleted = 0 AND memo_id IN (${placeholders})
@@ -571,9 +571,9 @@ export const registerBackupRoutes = (
       const now = isoNow();
       await context.env.storage.db.prepare(
         `INSERT INTO resources (
-          id, memo_id, original_memo_id, bucket_name, object_key, storage_config_id, kind, mime_type, filename,
+          id, memo_id, original_memo_id, bucket_name, object_key, storage_config_id, kind, role, format_key, mime_type, filename,
           byte_size, sha256, width, height, metadata_json, is_deleted, created_at, updated_at, deleted_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
         ON CONFLICT(id) DO UPDATE SET
           memo_id = excluded.memo_id,
           original_memo_id = excluded.original_memo_id,
@@ -581,6 +581,8 @@ export const registerBackupRoutes = (
           object_key = excluded.object_key,
           storage_config_id = excluded.storage_config_id,
           kind = excluded.kind,
+          role = excluded.role,
+          format_key = excluded.format_key,
           mime_type = excluded.mime_type,
           filename = excluded.filename,
           byte_size = excluded.byte_size,
@@ -599,6 +601,8 @@ export const registerBackupRoutes = (
         objectKey,
         destination.configId,
         metadata.kind,
+        metadata.role ?? "attachment",
+        metadata.formatKey ?? null,
         mimeType,
         filename,
         bytes.byteLength,

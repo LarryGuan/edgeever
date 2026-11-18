@@ -53,6 +53,8 @@ export * from "./diagram-architecture-style";
 export * from "./diagram-mindmap-style";
 export * from "./diagram-view";
 export * from "./file-attachment";
+export * from "./file-document";
+export * from "./document-presentation";
 export * from "./note-image-card";
 export * from "./pdf-attachment";
 export * from "./types";

@@ -2812,6 +2812,11 @@ export const de = {
     "manualSyncing": "Notizen werden synchronisiert",
     "manualSyncOffline": "Notizen können offline nicht synchronisiert werden"
   },
+  "fileNote": {
+    "title": "File note", "loading": "Loading file…", "unavailable": "The primary file is unavailable.", "unknownType": "Unknown type",
+    "readOnlyDescription": "This file can be downloaded or replaced. Preview and editing are not supported yet.", "download": "Download", "replace": "Replace file", "replacing": "Replacing…",
+    "replaceFailed": "The file could not be replaced. Refresh and try again."
+  },
   "memoCard": {
     "yesterday": "Gestern",
     "createdAt": "Erstellt {{time}}",

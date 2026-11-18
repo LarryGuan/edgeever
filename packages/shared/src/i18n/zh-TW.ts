@@ -2626,6 +2626,11 @@ export const zhTW = {
     manualSyncing: "正在同步筆記",
     manualSyncOffline: "離線時無法同步筆記",
   },
+  fileNote: {
+    title: "檔案筆記", loading: "正在載入檔案…", unavailable: "主要檔案不可用。", unknownType: "未知類型",
+    readOnlyDescription: "目前支援下載或取代檔案，暫不支援線上預覽和編輯。", download: "下載", replace: "取代檔案", replacing: "正在取代…",
+    replaceFailed: "檔案取代失敗，請重新整理後再試。",
+  },
   memoCard: {
     yesterday: "昨天",
     createdAt: "建立 {{time}}",

@@ -6,6 +6,8 @@
 
 在 **个人中心** → **API / MCP** 中为每个客户端单独创建 Token，然后点击 **复制 MCP 配置**。搜索和总结选 **只读访问**，需要新建或修改笔记时选 **完全访问**。如果 Token 泄露，在这里删除它并创建新的 Token。
 
+CLI 的多 Profile、笔记本范围和本地工作区用法见[《EdgeEver CLI 与 Skill 使用手册》](edgeever-cli-skill-guide.zh-CN.md)。
+
 远程客户端通过 Streamable HTTP 连接。使用实例地址加 `/mcp`，例如 `https://notes.example.com/mcp`，并发送 `Authorization: Bearer <token>`。请确认复制的地址指向你的 EdgeEver 实例。
 
 ### Cursor 等支持 `mcpServers` 的客户端

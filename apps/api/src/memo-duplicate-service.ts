@@ -28,6 +28,8 @@ type DuplicateResourceRow = {
   object_key: string;
   storage_config_id: string;
   kind: "image" | "attachment";
+  role: "attachment" | "primary";
+  format_key: string | null;
   mime_type: string | null;
   filename: string | null;
   byte_size: number;
@@ -93,7 +95,7 @@ export const duplicateMemoRecord = async (
   }
 
   const resources = (await db.prepare(
-    `SELECT id, object_key, storage_config_id, kind, mime_type, filename, byte_size, sha256, width, height, metadata_json
+    `SELECT id, object_key, storage_config_id, kind, role, format_key, mime_type, filename, byte_size, sha256, width, height, metadata_json
      FROM resources
      WHERE memo_id = ? AND is_deleted = 0
        AND COALESCE(json_extract(metadata_json, '$.pending'), 0) <> 1
@@ -193,9 +195,9 @@ export const duplicateMemoRecord = async (
       upsertMemoSearchDocumentStatement(db, newMemoId, title, contentText, tags.join(" ")),
       ...copies.map((copy) => db.prepare(
         `INSERT INTO resources (
-          id, memo_id, bucket_name, object_key, storage_config_id, kind, mime_type, filename,
+          id, memo_id, bucket_name, object_key, storage_config_id, kind, role, format_key, mime_type, filename,
           byte_size, sha256, width, height, metadata_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         copy.newId,
         newMemoId,
@@ -203,6 +205,8 @@ export const duplicateMemoRecord = async (
         copy.newObjectKey,
         destination.configId,
         copy.kind,
+        copy.role,
+        copy.format_key,
         copy.mime_type,
         copy.filename,
         copy.byte_size,

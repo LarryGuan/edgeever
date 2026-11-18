@@ -17,6 +17,14 @@ Use `--pull-only` for download-only intent, `--dry-run` for preview, and `--auto
 
 If no workspace exists, establish scope using returned notebook IDs. If credentials are missing, ask the user to configure a profile locally; do not request tokens in chat. `edgeever profile list` displays URLs and token presence safely. Avoid reading full config/state; these contain credentials or private references and are unnecessary for routine sync.
 
+## Profiles, tokens and notebook boundaries
+
+One profile stores one instance URL and one token; one config file may store multiple profiles, but each command uses exactly one profile/token. If the user selected a profile, pass `--profile NAME`. Multiple profiles for the same URL make automatic workspace selection ambiguous, so never guess. `EDGEEVER_URL` and `EDGEEVER_TOKEN` override the selected profile; notice their presence without printing values before claiming which identity a command will use. Use `EDGEEVER_CONFIG` only when the user wants file-level configuration isolation.
+
+API tokens combine functional scopes with an optional data boundary. A notebook boundary covers the selected notebook roots and their descendants; it is not a per-memo grant. A memo ID targets one operation but never widens authorization. Treat an unreadable memo as possibly out of scope, not necessarily missing. For one-note isolation, the user must place that note in a dedicated notebook and scope the token to it.
+
+Use separate local workspace directories for identities with different notebook boundaries. Do not alternate an unrestricted and a restricted token against the same local workspace index: partial visibility can make the saved scope and the active credential disagree. Never combine results across profiles unless the user explicitly asks for a cross-profile operation.
+
 ## Link, bind and upgrade
 
 ```sh

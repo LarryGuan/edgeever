@@ -143,7 +143,7 @@ const main = async () => {
     if (action === "sync") {
       const result = await syncWorkspace(directory, client, { dryRun: options["dry-run"] === "true", pullOnly: options["pull-only"] === "true", autoMerge: options["auto-merge"] === "true" });
       printJson(result);
-      if (result.results.some(item => ["unresolved-markers", "conflict", "diagram-read-only", "path-occupied", "local-changed-during-sync", "missing-local", "attachment-error", "duplicate-id", "unbound-id", "identity-mismatch", "metadata-error"].includes(item.status))) process.exitCode = 2;
+      if (result.results.some(item => ["unresolved-markers", "conflict", "diagram-read-only", "file-note-unsupported", "path-occupied", "local-changed-during-sync", "missing-local", "attachment-error", "duplicate-id", "unbound-id", "identity-mismatch", "metadata-error"].includes(item.status))) process.exitCode = 2;
       return;
     }
     throw new Error("Unknown workspace command: use link, status, sync, migrate, import, resolve, uploads or retry-upload");

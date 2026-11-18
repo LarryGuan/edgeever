@@ -100,7 +100,7 @@ export const registerResourceRoutes = (
     const [rows, stats] = await Promise.all([
       context.env.storage.db.prepare(
         `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind,
-                r.mime_type, r.filename, r.byte_size, r.sha256, r.width, r.height,
+                r.role, r.format_key, r.mime_type, r.filename, r.byte_size, r.sha256, r.width, r.height,
                 r.created_at, r.updated_at, m.title AS memo_title, m.excerpt AS memo_excerpt,
                 m.is_deleted AS memo_is_deleted
          FROM resources r
@@ -410,6 +410,10 @@ export const registerResourceRoutes = (
         context.env.storage.db.prepare(
           `UPDATE resources SET filename = ?, updated_at = ? WHERE id = ?`,
         ).bind(filename, now, resourceId),
+        context.env.storage.db.prepare(
+          `UPDATE memos SET updated_at = ?
+           WHERE id = ? AND workspace_id = ? AND ? = 'primary'`,
+        ).bind(now, resource.memo_id, workspaceId, resource.role ?? "attachment"),
         auditStatement(context.env.storage.db, actor.actorType, actor.actorId, "resource.rename", "resource", resourceId, {
           memoId: resource.memo_id,
           previousFilename: resource.filename,
@@ -439,6 +443,9 @@ export const registerResourceRoutes = (
       true,
     );
     if (!resource) return notFound(context, "Resource not found");
+    if (resource.role === "primary") {
+      return apiError(context, "primary_resource_delete_forbidden", "Delete the file note instead of deleting its primary file.", 409);
+    }
 
     const source = await resolveObjectStorage(context.env, resource.storage_config_id);
     await source.store.delete(resource.object_key);

@@ -345,9 +345,9 @@ const completeRestoredResourceUpload = async (
     await context.env.storage.db.batch([
       context.env.storage.db.prepare(
         `INSERT INTO resources (
-          id, memo_id, original_memo_id, bucket_name, object_key, storage_config_id, kind, mime_type, filename,
+          id, memo_id, original_memo_id, bucket_name, object_key, storage_config_id, kind, role, format_key, mime_type, filename,
           byte_size, sha256, width, height, metadata_json, is_deleted, created_at, updated_at, deleted_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
         ON CONFLICT(id) DO UPDATE SET
           memo_id = excluded.memo_id,
           original_memo_id = excluded.original_memo_id,
@@ -355,6 +355,8 @@ const completeRestoredResourceUpload = async (
           object_key = excluded.object_key,
           storage_config_id = excluded.storage_config_id,
           kind = excluded.kind,
+          role = excluded.role,
+          format_key = excluded.format_key,
           mime_type = excluded.mime_type,
           filename = excluded.filename,
           byte_size = excluded.byte_size,
@@ -373,6 +375,8 @@ const completeRestoredResourceUpload = async (
         upload.object_key,
         upload.storage_config_id,
         metadata.kind,
+        metadata.role ?? "attachment",
+        metadata.formatKey ?? null,
         metadata.mimeType ?? upload.mime_type,
         upload.filename,
         upload.byte_size,

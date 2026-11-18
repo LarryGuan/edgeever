@@ -1,4 +1,4 @@
-import { docToMarkdown, markdownToDoc, type TiptapDoc } from "@edgeever/shared";
+import { docToMarkdown, inferFileDocumentFormatKey, markdownToDoc, serializeFileDocumentMarker, type TiptapDoc } from "@edgeever/shared";
 import { screenshotNoteContent } from "./screenshot-import";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
@@ -82,9 +82,17 @@ export const createSharedFileMemo = async <TMemo extends SharedMemo>(input: {
     const prepared = input.prepareFile ? await input.prepareFile(input.file) : input.file;
     const resource = await input.uploadResource(created.memo.id, prepared);
     const filename = resource.filename || prepared.name || input.filename;
+    const fallbackMarkdown = sharedFileAttachmentMarkdown(filename, resource.url);
+    const fallbackContent = attachmentNoteContent(fallbackMarkdown);
     const content = isImageFile(filename, prepared.type || input.file.type)
       ? screenshotNoteContent(filename, resource.url)
-      : attachmentNoteContent(sharedFileAttachmentMarkdown(filename, resource.url));
+      : {
+          contentJson: fallbackContent.contentJson,
+          contentMarkdown: `${serializeFileDocumentMarker({
+            formatKey: inferFileDocumentFormatKey(filename, prepared.type || input.file.type),
+            resourceUrl: resource.url,
+          })}\n\n${fallbackContent.contentMarkdown}`,
+        };
     return (await input.updateMemo(created.memo, content)).memo;
   } catch (error) {
     await input.deleteMemo?.(created.memo.id).catch(() => undefined);
