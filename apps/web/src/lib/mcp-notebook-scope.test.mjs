@@ -1,16 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import {
   getNotebookScopeSelectionState,
+  getVisibleNotebookScopeOptions,
   normalizeNotebookScopeRoots,
   toggleNotebookScopeRoot,
 } from "./mcp-notebook-scope.ts";
 
-const notebook = (id, parentId = null) => ({ id, parentId });
+const notebook = (id, parentId = null, sortOrder = 0) => ({
+  id,
+  parentId,
+  name: id,
+  sortOrder,
+  memoCount: 0,
+  lastMemoUpdatedAt: null,
+});
 const notebooks = [
   notebook("work"),
   notebook("projects", "work"),
   notebook("alpha", "projects"),
-  notebook("personal"),
+  notebook("personal", null, 1),
 ];
 
 describe("MCP notebook scope picker", () => {
@@ -31,5 +39,14 @@ describe("MCP notebook scope picker", () => {
       .toEqual(["personal", "work"]);
     expect(toggleNotebookScopeRoot(notebooks, ["work", "personal"], "work"))
       .toEqual(["personal"]);
+  });
+
+  test("shows only roots until their branches are expanded", () => {
+    expect(getVisibleNotebookScopeOptions(notebooks, []).map((option) => option.id))
+      .toEqual(["work", "personal"]);
+    expect(getVisibleNotebookScopeOptions(notebooks, ["work"]).map((option) => option.id))
+      .toEqual(["work", "projects", "personal"]);
+    expect(getVisibleNotebookScopeOptions(notebooks, ["work", "projects"]).map((option) => option.id))
+      .toEqual(["work", "projects", "alpha", "personal"]);
   });
 });

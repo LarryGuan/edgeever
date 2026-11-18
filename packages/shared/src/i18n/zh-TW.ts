@@ -3722,6 +3722,13 @@ export const zhTW = {
     editNotebookScope: "修改授權筆記",
     editNotebookScopeTitle: "修改「{{name}}」的筆記授權",
     editNotebookScopeDescription: "Token 本身不會改變。選擇父筆記本會同時授權其目前及以後新增的子孫筆記本。",
+    editToken: "編輯 Token",
+    editTokenTitle: "編輯 Token「{{name}}」",
+    editTokenDescription: "Token 本身不會改變，可在這裡修改名稱、存取權限和授權筆記。",
+    tokenName: "Token 名稱",
+    legacyAccessPreserved: "舊版自訂權限將保持不變；只有主動選擇完整存取或唯讀存取時才會轉換。",
+    expandNotebook: "展開 {{name}}",
+    collapseNotebook: "收起 {{name}}",
     accessLevels: {
       full: {
         label: "完全訪問",

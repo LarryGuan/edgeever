@@ -3722,6 +3722,13 @@ export const zhCN = {
     editNotebookScope: "修改授权笔记",
     editNotebookScopeTitle: "修改「{{name}}」的笔记授权",
     editNotebookScopeDescription: "Token 本身不会改变。选择父笔记本会同时授权其当前及以后新增的子孙笔记本。",
+    editToken: "编辑 Token",
+    editTokenTitle: "编辑 Token「{{name}}」",
+    editTokenDescription: "Token 本身不会改变，可在这里修改名称、访问权限和授权笔记。",
+    tokenName: "Token 名称",
+    legacyAccessPreserved: "旧版自定义权限将保持不变；只有主动选择完全访问或只读访问时才会转换。",
+    expandNotebook: "展开 {{name}}",
+    collapseNotebook: "收起 {{name}}",
     accessLevels: {
       full: {
         label: "完全访问",

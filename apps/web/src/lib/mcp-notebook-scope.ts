@@ -1,4 +1,37 @@
 import type { Notebook } from "@edgeever/shared";
+import { buildNotebookTree } from "./utils";
+
+export type VisibleNotebookScopeOption = {
+  id: string;
+  name: string;
+  depth: number;
+  hasChildren: boolean;
+};
+
+export const getVisibleNotebookScopeOptions = (
+  notebooks: Notebook[],
+  expandedIds: string[],
+): VisibleNotebookScopeOption[] => {
+  const expanded = new Set(expandedIds);
+  const visible: VisibleNotebookScopeOption[] = [];
+
+  const visit = (nodes: ReturnType<typeof buildNotebookTree>, depth: number) => {
+    for (const node of nodes) {
+      visible.push({
+        id: node.id,
+        name: node.name,
+        depth,
+        hasChildren: node.children.length > 0,
+      });
+      if (node.children.length > 0 && expanded.has(node.id)) {
+        visit(node.children, depth + 1);
+      }
+    }
+  };
+
+  visit(buildNotebookTree(notebooks), 0);
+  return visible;
+};
 
 const parentMap = (notebooks: Notebook[]) => new Map(notebooks.map((notebook) => [notebook.id, notebook.parentId]));
 

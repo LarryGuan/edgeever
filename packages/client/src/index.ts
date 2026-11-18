@@ -1377,7 +1377,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
         body: JSON.stringify(payload),
       }),
 
-    updateApiToken: (tokenId: string, payload: { mcpScopeMode: "all" | "notebooks"; mcpNotebookIds: string[] }) =>
+    updateApiToken: (tokenId: string, payload: { name?: string; scopes?: string[]; mcpScopeMode: "all" | "notebooks"; mcpNotebookIds: string[] }) =>
       request<{ apiToken: ApiToken }>(`/api/v1/api-tokens/${encodeURIComponent(tokenId)}`, {
         method: "PATCH",
         body: JSON.stringify(payload),

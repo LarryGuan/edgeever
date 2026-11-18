@@ -3723,6 +3723,13 @@ export const ru = {
     editNotebookScope: "Edit notebook access",
     editNotebookScopeTitle: "Edit access for {{name}}",
     editNotebookScopeDescription: "The existing token stays unchanged. Selecting a parent includes its current and future descendants.",
+    editToken: "Edit token",
+    editTokenTitle: "Edit token “{{name}}”",
+    editTokenDescription: "The token value stays unchanged. Update its name, access level, and notebook access here.",
+    tokenName: "Token name",
+    legacyAccessPreserved: "Legacy custom access will stay unchanged unless you select Full access or Read-only.",
+    expandNotebook: "Expand {{name}}",
+    collapseNotebook: "Collapse {{name}}",
     accessLevels: {
       full: {
         label: "Полный доступ",

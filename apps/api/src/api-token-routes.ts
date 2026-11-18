@@ -219,6 +219,9 @@ export const registerApiTokenRoutes = (
       if (!beforeRow) return notFound(context, "API token not found");
 
       const input = context.req.valid("json");
+      const before = mapApiToken(beforeRow);
+      const scopes = input.scopes === undefined ? before.scopes : normalizeTokenScopes(input.scopes);
+      if (!scopes) return badRequest(context, "Token scope is not supported.");
       const mcpNotebookIds = await normalizeNotebookScope(
         context.env.storage.db,
         workspaceId,
@@ -227,12 +230,20 @@ export const registerApiTokenRoutes = (
       );
       if (!mcpNotebookIds) return badRequest(context, "MCP notebook scope is not available.");
 
-      const before = mapApiToken(beforeRow);
       const actor = getAuditActor(context);
       await context.env.storage.db.batch([
         context.env.storage.db.prepare(
-          `UPDATE api_tokens SET mcp_scope_mode = ?, mcp_notebook_id = ? WHERE id = ? AND workspace_id = ?`,
-        ).bind(input.mcpScopeMode, legacyScopeValue(input.mcpScopeMode, mcpNotebookIds), id, workspaceId),
+          `UPDATE api_tokens
+           SET name = ?, scopes_json = ?, mcp_scope_mode = ?, mcp_notebook_id = ?
+           WHERE id = ? AND workspace_id = ?`,
+        ).bind(
+          input.name ?? before.name,
+          JSON.stringify(scopes),
+          input.mcpScopeMode,
+          legacyScopeValue(input.mcpScopeMode, mcpNotebookIds),
+          id,
+          workspaceId,
+        ),
         context.env.storage.db.prepare(
           `DELETE FROM api_token_notebook_scopes WHERE token_id = ?`,
         ).bind(id),
@@ -243,12 +254,22 @@ export const registerApiTokenRoutes = (
           context.env.storage.db,
           actor.actorType,
           actor.actorId,
-          "api_token.scope_update",
+          "api_token.update",
           "api_token",
           id,
           {
-            before: { mcpScopeMode: before.mcpScopeMode, mcpNotebookIds: before.mcpNotebookIds },
-            after: { mcpScopeMode: input.mcpScopeMode, mcpNotebookIds },
+            before: {
+              name: before.name,
+              scopes: before.scopes,
+              mcpScopeMode: before.mcpScopeMode,
+              mcpNotebookIds: before.mcpNotebookIds,
+            },
+            after: {
+              name: input.name ?? before.name,
+              scopes,
+              mcpScopeMode: input.mcpScopeMode,
+              mcpNotebookIds,
+            },
           },
         ),
       ]);

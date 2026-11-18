@@ -76,6 +76,8 @@ describe("API token notebook scopes", () => {
     const updated = await updatedResponse.json();
     expect(updated.apiToken).toMatchObject({
       token: created.token,
+      name: "Scoped",
+      scopes: ["read:memos"],
       mcpScopeMode: "notebooks",
       mcpNotebookIds: ["scope_child"],
       mcpNotebookId: "scope_child",
@@ -83,12 +85,34 @@ describe("API token notebook scopes", () => {
     expect(f.database.query("SELECT notebook_id FROM api_token_notebook_scopes WHERE token_id = ?").all(created.apiToken.id))
       .toEqual([{ notebook_id: "scope_child" }]);
 
+    const editedResponse = await f.request(`/api/v1/api-tokens/${created.apiToken.id}`, f.json("PATCH", {
+      name: "Read-only agent",
+      scopes: ["read:notebooks", "read:memos", "read:resources", "read:tags"],
+      mcpScopeMode: "notebooks",
+      mcpNotebookIds: ["scope_parent"],
+    }));
+    expect(editedResponse.status).toBe(200);
+    const edited = await editedResponse.json();
+    expect(edited.apiToken).toMatchObject({
+      token: created.token,
+      name: "Read-only agent",
+      scopes: ["read:notebooks", "read:memos", "read:resources", "read:tags"],
+      mcpScopeMode: "notebooks",
+      mcpNotebookIds: ["scope_parent"],
+    });
+
     const invalid = await f.request(`/api/v1/api-tokens/${created.apiToken.id}`, f.json("PATCH", {
+      name: "Must not persist",
       mcpScopeMode: "notebooks",
       mcpNotebookIds: ["scope_foreign"],
     }));
     expect(invalid.status).toBe(400);
+    expect(f.database.query("SELECT name, scopes_json FROM api_tokens WHERE id = ?").get(created.apiToken.id))
+      .toEqual({
+        name: "Read-only agent",
+        scopes_json: '["read:notebooks","read:memos","read:resources","read:tags"]',
+      });
     expect(f.database.query("SELECT notebook_id FROM api_token_notebook_scopes WHERE token_id = ?").all(created.apiToken.id))
-      .toEqual([{ notebook_id: "scope_child" }]);
+      .toEqual([{ notebook_id: "scope_parent" }]);
   });
 });

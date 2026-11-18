@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Copy, KeyRound, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, KeyRound, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import type { ApiToken, Notebook } from "@edgeever/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,8 +22,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
-import { getNotebookMoveOptions } from "@/lib/app-helpers";
-import { getNotebookScopeSelectionState, toggleNotebookScopeRoot } from "@/lib/mcp-notebook-scope";
+import {
+  getNotebookScopeSelectionState,
+  getVisibleNotebookScopeOptions,
+  toggleNotebookScopeRoot,
+} from "@/lib/mcp-notebook-scope";
 import { cn, formatDateTime } from "@/lib/utils";
 import { AppConfirmDialog } from "@/components/dialogs/ConfirmDialogs";
 import {
@@ -36,6 +39,7 @@ import {
   getStoredTokenAccessLevel,
   getTokenScopesForAccessLevel,
   getTokenScopeLabel,
+  type StoredTokenAccessLevel,
   type TokenAccessLevel,
 } from "./settings-utils";
 
@@ -98,11 +102,12 @@ const McpExampleDialog = () => {
 };
 
 interface AccessLevelPickerProps {
-  value: TokenAccessLevel;
+  value: StoredTokenAccessLevel;
   onChange: (accessLevel: TokenAccessLevel) => void;
+  inputName: string;
 }
 
-const AccessLevelPicker = ({ value, onChange }: AccessLevelPickerProps) => {
+const AccessLevelPicker = ({ value, onChange, inputName }: AccessLevelPickerProps) => {
   const { t } = useTranslation();
   const options: TokenAccessLevel[] = ["full", "read-only"];
 
@@ -115,7 +120,7 @@ const AccessLevelPicker = ({ value, onChange }: AccessLevelPickerProps) => {
       >
         {options.map((option) => {
           const checked = value === option;
-          const inputId = `token-access-${option}`;
+          const inputId = `${inputName}-${option}`;
 
           return (
             <Tooltip key={option}>
@@ -133,7 +138,7 @@ const AccessLevelPicker = ({ value, onChange }: AccessLevelPickerProps) => {
                     id={inputId}
                     className="sr-only"
                     type="radio"
-                    name="token-access-level"
+                    name={inputName}
                     value={option}
                     checked={checked}
                     onChange={() => onChange(option)}
@@ -167,7 +172,8 @@ interface NotebookScopePickerProps {
 
 const NotebookScopePicker = ({ notebooks, mode, notebookIds, onChange }: NotebookScopePickerProps) => {
   const { t } = useTranslation();
-  const options = getNotebookMoveOptions(notebooks);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const options = getVisibleNotebookScopeOptions(notebooks, expandedIds);
   const summary = mode === "all"
     ? t("mcp.allNotebooks")
     : notebookIds.length > 0
@@ -175,7 +181,7 @@ const NotebookScopePicker = ({ notebooks, mode, notebookIds, onChange }: Noteboo
       : t("mcp.selectNotebooks");
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => { if (open) setExpandedIds([]); }}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -197,6 +203,7 @@ const NotebookScopePicker = ({ notebooks, mode, notebookIds, onChange }: Noteboo
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
         {options.map((option) => {
+          const expanded = expandedIds.includes(option.id);
           const state = mode === "notebooks"
             ? getNotebookScopeSelectionState(notebooks, notebookIds, option.id)
             : { checked: false, explicit: false, inherited: false, indeterminate: false };
@@ -204,7 +211,7 @@ const NotebookScopePicker = ({ notebooks, mode, notebookIds, onChange }: Noteboo
             <DropdownMenuCheckboxItem
               key={option.id}
               checked={state.indeterminate ? "indeterminate" : state.checked}
-              disabled={state.inherited}
+              aria-disabled={state.inherited}
               className="pr-2"
               style={{ paddingLeft: `${32 + option.depth * 16}px` }}
               onSelect={(event) => event.preventDefault()}
@@ -213,6 +220,27 @@ const NotebookScopePicker = ({ notebooks, mode, notebookIds, onChange }: Noteboo
                 toggleNotebookScopeRoot(notebooks, mode === "notebooks" ? notebookIds : [], option.id),
               )}
             >
+              {option.hasChildren ? (
+                <button
+                  type="button"
+                  className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-slate-500 hover:bg-slate-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20"
+                  aria-expanded={expanded}
+                  aria-label={t(expanded ? "mcp.collapseNotebook" : "mcp.expandNotebook", { name: option.name })}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onPointerUp={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setExpandedIds((current) => expanded
+                      ? current.filter((id) => id !== option.id)
+                      : [...current, option.id]);
+                  }}
+                >
+                  {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                </button>
+              ) : (
+                <span className="mr-1 h-5 w-5 shrink-0" aria-hidden="true" />
+              )}
               <span className="truncate">{option.name}</span>
               {state.inherited ? <span className="ml-auto text-[10px] text-slate-400">{t("mcp.inheritedScope")}</span> : null}
             </DropdownMenuCheckboxItem>
@@ -401,14 +429,14 @@ const TokenList = ({ tokens, notebooks, availableScopes, newlyCreatedTokenId, is
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      aria-label={t("mcp.editNotebookScope")}
+                      aria-label={t("mcp.editToken")}
                       disabled={token.isRevoked}
                       onClick={() => onEdit(token)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">{t("mcp.editNotebookScope")}</TooltipContent>
+                  <TooltipContent side="bottom">{t("mcp.editToken")}</TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
@@ -444,6 +472,9 @@ export const McpConfigCard = () => {
   const [mcpNotebookIds, setMcpNotebookIds] = useState<string[]>([]);
   const [newlyCreatedTokenId, setNewlyCreatedTokenId] = useState<string | null>(null);
   const [tokenScopeEdit, setTokenScopeEdit] = useState<ApiToken | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAccessLevel, setEditAccessLevel] = useState<StoredTokenAccessLevel>(DEFAULT_TOKEN_ACCESS_LEVEL);
+  const [editAccessChanged, setEditAccessChanged] = useState(false);
   const [editScopeMode, setEditScopeMode] = useState<NotebookScopeMode>("all");
   const [editNotebookIds, setEditNotebookIds] = useState<string[]>([]);
   const [tokenDeleteConfirmation, setTokenDeleteConfirmation] = useState<ApiToken | null>(null);
@@ -481,8 +512,18 @@ export const McpConfigCard = () => {
   });
 
   const updateTokenMutation = useMutation({
-    mutationFn: ({ tokenId, mode, notebookIds }: { tokenId: string; mode: NotebookScopeMode; notebookIds: string[] }) =>
-      api.updateApiToken(tokenId, { mcpScopeMode: mode, mcpNotebookIds: notebookIds }),
+    mutationFn: ({ tokenId, tokenName, scopes, mode, notebookIds }: {
+      tokenId: string;
+      tokenName: string;
+      scopes?: string[];
+      mode: NotebookScopeMode;
+      notebookIds: string[];
+    }) => api.updateApiToken(tokenId, {
+      name: tokenName,
+      ...(scopes ? { scopes } : {}),
+      mcpScopeMode: mode,
+      mcpNotebookIds: notebookIds,
+    }),
     onSuccess: async () => {
       setTokenScopeEdit(null);
       await queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
@@ -494,6 +535,9 @@ export const McpConfigCard = () => {
       ? token.mcpNotebookIds
       : token.mcpNotebookId ? [token.mcpNotebookId] : [];
     setTokenScopeEdit(token);
+    setEditName(token.name);
+    setEditAccessLevel(getStoredTokenAccessLevel(token.scopes, availableScopes));
+    setEditAccessChanged(false);
     setEditScopeMode(token.mcpScopeMode);
     setEditNotebookIds(notebookIds);
   };
@@ -552,6 +596,7 @@ export const McpConfigCard = () => {
                 <AccessLevelPicker
                   value={accessLevel}
                   onChange={setAccessLevel}
+                  inputName="token-access-create"
                 />
                 <Button
                   size="sm"
@@ -595,18 +640,45 @@ export const McpConfigCard = () => {
       <Dialog open={Boolean(tokenScopeEdit)} onOpenChange={(open) => { if (!open) setTokenScopeEdit(null); }}>
         <DialogContent className="max-w-md gap-4 p-5">
           <DialogHeader>
-            <DialogTitle>{t("mcp.editNotebookScopeTitle", { name: tokenScopeEdit?.name ?? "" })}</DialogTitle>
-            <DialogDescription>{t("mcp.editNotebookScopeDescription")}</DialogDescription>
+            <DialogTitle>{t("mcp.editTokenTitle", { name: tokenScopeEdit?.name ?? "" })}</DialogTitle>
+            <DialogDescription>{t("mcp.editTokenDescription")}</DialogDescription>
           </DialogHeader>
-          <NotebookScopePicker
-            notebooks={notebooks}
-            mode={editScopeMode}
-            notebookIds={editNotebookIds}
-            onChange={(mode, notebookIds) => {
-              setEditScopeMode(mode);
-              setEditNotebookIds(notebookIds);
-            }}
-          />
+          <div className="grid gap-4">
+            <label className="grid gap-1.5 text-xs text-slate-700">
+              <span>{t("mcp.tokenName")}</span>
+              <Input
+                value={editName}
+                maxLength={80}
+                onChange={(event) => setEditName(event.target.value)}
+              />
+            </label>
+            <div className="grid gap-1.5">
+              <span className="text-xs text-slate-700">{t("mcp.accessLevelTitle")}</span>
+              <AccessLevelPicker
+                value={editAccessLevel}
+                inputName="token-access-edit"
+                onChange={(nextAccessLevel) => {
+                  setEditAccessLevel(nextAccessLevel);
+                  setEditAccessChanged(true);
+                }}
+              />
+              {editAccessLevel === "legacy-custom" && !editAccessChanged ? (
+                <p className="text-xs text-amber-700">{t("mcp.legacyAccessPreserved")}</p>
+              ) : null}
+            </div>
+            <div className="grid gap-1.5">
+              <span className="text-xs text-slate-700">{t("mcp.notebookScopeTitle")}</span>
+              <NotebookScopePicker
+                notebooks={notebooks}
+                mode={editScopeMode}
+                notebookIds={editNotebookIds}
+                onChange={(mode, notebookIds) => {
+                  setEditScopeMode(mode);
+                  setEditNotebookIds(notebookIds);
+                }}
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setTokenScopeEdit(null)}>
               {t("common.cancel")}
@@ -614,10 +686,18 @@ export const McpConfigCard = () => {
             <Button
               type="button"
               variant="solid"
-              disabled={updateTokenMutation.isPending || (editScopeMode === "notebooks" && editNotebookIds.length === 0)}
+              disabled={updateTokenMutation.isPending || !editName.trim() || (editScopeMode === "notebooks" && editNotebookIds.length === 0)}
               onClick={() => {
                 if (!tokenScopeEdit) return;
-                updateTokenMutation.mutate({ tokenId: tokenScopeEdit.id, mode: editScopeMode, notebookIds: editNotebookIds });
+                updateTokenMutation.mutate({
+                  tokenId: tokenScopeEdit.id,
+                  tokenName: editName.trim(),
+                  scopes: editAccessChanged && editAccessLevel !== "legacy-custom"
+                    ? getTokenScopesForAccessLevel(editAccessLevel, availableScopes)
+                    : undefined,
+                  mode: editScopeMode,
+                  notebookIds: editNotebookIds,
+                });
               }}
             >
               {t("common.save")}

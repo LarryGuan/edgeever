@@ -283,6 +283,8 @@ export const ApiTokenCreateSchema = z.object({
 });
 
 export const ApiTokenUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  scopes: z.array(z.string().trim().min(1).max(80)).min(1).max(32).optional(),
   mcpScopeMode: z.enum(["all", "notebooks"]),
   mcpNotebookIds: ApiTokenNotebookIdsSchema,
 }).superRefine((input, context) => {
