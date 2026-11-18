@@ -10,7 +10,19 @@
 
 凭据、数据库、笔记正文和备份不得进入 Git 或公开构建产物。Fork 源码继续遵守上游 AGPL 许可证。
 
-## 当前生产部署记录 — 2026-11-17
+## 当前生产部署记录 — 2026-11-19
+
+- 生产代码提交：`a73e0af291e3a25a362d2fe25306d1774e3effde`。
+- 云效运行：`#11`，build 与 deploy 均为 `SUCCESS`。
+- 生产镜像：`registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy:2026-11-19-04-40-31`。
+- 镜像摘要：`sha256:77f8de7c01249c96640adfbe2b38d955f2f3d032eef0658ff90162fe41b7cab0`。
+- 生产部署冷备：`/data/edgeever/backups/20261118T204302Z-1452927`，其中 `data.tgz` 为非空完整数据归档。
+- 线上 `/api/health` 返回 `ok=true`、`migration=0098`，OpenAPI 可访问；容器处于 `healthy`。
+- 使用现有 `openbox` Profile 完成认证读取，返回 45 个可见笔记本。
+- 本机 CLI 与 Claude Skill 已更新为 `0.8.1`，`~/.agents/skills/edgeever` 仍软链到 Claude Skill。
+- CLI `0.8.0` 回滚包：`~/.local/state/edgeever/automation-backups/20261119T044249/knowledge-workbench-edgeever-cli-0.8.0.tgz`。
+
+## 上一生产部署记录 — 2026-11-17
 
 - 生产提交：`f027935f185d6ca8acafc6a3e5de35a9c812a6a8`，固定上游 `v2.28.2` / `30bd18fdfa48118da265f849b974f9fbd2f0f46f`。
 - 云效运行：`#6`，build 与 deploy 均为 `SUCCESS`。

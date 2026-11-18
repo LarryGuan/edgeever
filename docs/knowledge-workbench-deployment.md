@@ -10,7 +10,19 @@ Before deployment, back up the full production `/data` volume and Compose config
 
 Runtime credentials, databases, note content and backup archives must not enter Git or public build artifacts. This fork's source remains under the upstream AGPL license.
 
-## Current Production Deployment Record — 2026-11-17
+## Current Production Deployment Record — 2026-11-19
+
+- Production code commit: `a73e0af291e3a25a362d2fe25306d1774e3effde`.
+- Yunxiao run: `#11`; both build and deploy completed with `SUCCESS`.
+- Production image: `registry.cn-hangzhou.aliyuncs.com/larryguan/edgeever_zzy:2026-11-19-04-40-31`.
+- Image digest: `sha256:77f8de7c01249c96640adfbe2b38d955f2f3d032eef0658ff90162fe41b7cab0`.
+- Production cold backup: `/data/edgeever/backups/20261118T204302Z-1452927`, with a non-empty full `data.tgz` archive.
+- Live `/api/health` returned `ok=true` and `migration=0098`; OpenAPI was reachable and the container reported `healthy`.
+- An authenticated read through the existing `openbox` profile returned 45 visible notebooks.
+- The local CLI and Claude Skill are now `0.8.1`; `~/.agents/skills/edgeever` remains a symlink to the Claude Skill.
+- CLI `0.8.0` rollback package: `~/.local/state/edgeever/automation-backups/20261119T044249/knowledge-workbench-edgeever-cli-0.8.0.tgz`.
+
+## Previous Production Deployment Record — 2026-11-17
 
 - Production commit: `f027935f185d6ca8acafc6a3e5de35a9c812a6a8`, pinned to upstream `v2.28.2` / `30bd18fdfa48118da265f849b974f9fbd2f0f46f`.
 - Yunxiao run: `#6`; build and deploy both `SUCCESS`.

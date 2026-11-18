@@ -42,5 +42,5 @@ Treat a non-Markdown file as a note that remains visible and manageable in its n
 - Web: file drop, list identification, generic file pane, download, and SHA-256-guarded replacement are connected.
 - Safety: a primary resource must belong to the memo; normal editing cannot remove the file marker; the asset library cannot delete a primary resource independently.
 - Compatibility: backup, restore, and memo duplication preserve primary metadata; the fallback attachment link remains available to old clients.
-- Verified: root and mobile type checks, production Web build, all 24 CLI tests, plus focused migration, import, resource, backup/restore, and duplication tests.
-- Not run: production deployment, real OSS data migration, D2 preview, and CLI binary synchronization.
+- Verified: root and mobile type checks, production Web build, all 24 CLI tests, the complete 5,895-test non-E2E regression suite, plus focused migration, import, resource, backup/restore, and duplication tests. Yunxiao run `#11` is deployed and the live migration is `0098`.
+- Not run: live UI creation/replacement of a real file note, D2 preview, and CLI binary synchronization.
