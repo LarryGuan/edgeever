@@ -150,13 +150,15 @@ resolve_cli_installation() {
 }
 
 remote_main_sha() {
-  curl --silent --show-error --fail \
-    --connect-timeout 5 --max-time 15 \
-    --header 'Accept: application/vnd.github+json' \
-    --header 'User-Agent: edgeever-auto-update' \
-    'https://api.github.com/repos/LarryGuan/edgeever/commits/main' \
-    | python3 -c 'import json, sys; print(json.load(sys.stdin)["sha"])' \
-    || die "15 秒内无法读取 GitHub main；请检查网络后重试"
+  local result sha
+  if ! result="$(run_with_timeout 15 env GIT_TERMINAL_PROMPT=0 git \
+    -c http.version=HTTP/1.1 \
+    -C "$REPO_ROOT" ls-remote --exit-code origin refs/heads/main)"; then
+    die "15 秒内无法读取 GitHub main；请检查网络或 Git 凭据后重试"
+  fi
+  sha="${result%%$'\t'*}"
+  [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || die "GitHub main 返回了无效提交：$sha"
+  printf '%s\n' "$sha"
 }
 
 run_with_timeout() {
