@@ -2628,6 +2628,8 @@ export const pl = {
     title: "File note", loading: "Loading file…", unavailable: "The primary file is unavailable.", unknownType: "Unknown type",
     readOnlyDescription: "This file can be downloaded or replaced. Preview and editing are not supported yet.", download: "Download", replace: "Replace file", replacing: "Replacing…",
     replaceFailed: "The file could not be replaced. Refresh and try again.",
+    renameTitle: "Zmień nazwę pliku", renameDescription: "Zmienia nazwę bez zmiany rozszerzenia. Tytuł notatki pozostaje niezależny.", filenameLabel: "Nazwa pliku",
+    renameFailed: "Nie udało się zmienić nazwy pliku.", previewBeta: "Podgląd beta",
   },
   memoCard: {
     yesterday: "Wczoraj",
@@ -2672,6 +2674,7 @@ export const pl = {
     openInNewWindow: "Otwórz w nowym oknie",
     deleteTitle: "Usuń załącznik",
     deleteDescription: "Załącznik zostanie trwale usunięty z magazynu. Powiązane linki w notatce przestaną działać. Tej operacji nie można cofnąć.",
+    renameAria: "Zmień nazwę załącznika {{filename}}",
     deleteAria: "Usuń załącznik {{filename}}",
   },
   tagsDialog: {

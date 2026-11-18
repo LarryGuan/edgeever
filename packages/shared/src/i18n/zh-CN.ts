@@ -2645,6 +2645,11 @@ export const zhCN = {
     replace: "替换文件",
     replacing: "正在替换…",
     replaceFailed: "文件替换失败，请刷新后重试。",
+    renameTitle: "重命名文件",
+    renameDescription: "只修改文件名，不改变扩展名；笔记标题保持独立。",
+    filenameLabel: "文件名",
+    renameFailed: "文件重命名失败，请重试。",
+    previewBeta: "Beta 预览",
   },
   memoCard: {
     yesterday: "昨天",
@@ -2689,6 +2694,7 @@ export const zhCN = {
     openInNewWindow: "在新窗口打开",
     deleteTitle: "删除附件",
     deleteDescription: "附件将从存储空间中永久删除，笔记中的相关链接将无法再打开。此操作无法撤销。",
+    renameAria: "重命名附件 {{filename}}",
     deleteAria: "删除附件 {{filename}}",
   },
   tagsDialog: {

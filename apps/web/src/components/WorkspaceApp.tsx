@@ -2261,6 +2261,7 @@ export const WorkspaceApp = ({
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ["memos"], refetchType: "inactive" }),
         queryClient.invalidateQueries({ queryKey: ["notebooks"], refetchType: "inactive" }),
+        queryClient.invalidateQueries({ queryKey: ["resources"] }),
       ]);
       updateFileUploadTask(taskId, {
         status: "completed",

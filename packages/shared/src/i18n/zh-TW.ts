@@ -2639,6 +2639,8 @@ export const zhTW = {
     title: "檔案筆記", loading: "正在載入檔案…", unavailable: "主要檔案不可用。", unknownType: "未知類型",
     readOnlyDescription: "目前支援下載或取代檔案，暫不支援線上預覽和編輯。", download: "下載", replace: "取代檔案", replacing: "正在取代…",
     replaceFailed: "檔案取代失敗，請重新整理後再試。",
+    renameTitle: "重新命名檔案", renameDescription: "只修改檔案名稱，不改變副檔名；筆記標題保持獨立。", filenameLabel: "檔案名稱",
+    renameFailed: "檔案重新命名失敗，請再試一次。", previewBeta: "Beta 預覽",
   },
   memoCard: {
     yesterday: "昨天",
@@ -2683,6 +2685,7 @@ export const zhTW = {
     openInNewWindow: "在新視窗開啟",
     deleteTitle: "刪除附件",
     deleteDescription: "附件將從儲存空間中永久刪除，筆記中的相關連結將無法再開啟。此操作無法撤銷。",
+    renameAria: "重新命名附件 {{filename}}",
     deleteAria: "刪除附件 {{filename}}",
   },
   tagsDialog: {

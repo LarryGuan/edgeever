@@ -2639,6 +2639,8 @@ export const ru = {
     title: "File note", loading: "Loading file…", unavailable: "The primary file is unavailable.", unknownType: "Unknown type",
     readOnlyDescription: "This file can be downloaded or replaced. Preview and editing are not supported yet.", download: "Download", replace: "Replace file", replacing: "Replacing…",
     replaceFailed: "The file could not be replaced. Refresh and try again.",
+    renameTitle: "Переименовать файл", renameDescription: "Изменяет имя, не меняя расширение. Заголовок заметки остаётся отдельным.", filenameLabel: "Имя файла",
+    renameFailed: "Не удалось переименовать файл.", previewBeta: "Бета-просмотр",
   },
   memoCard: {
     yesterday: "Вчера",
@@ -2683,6 +2685,7 @@ export const ru = {
     openInNewWindow: "Открыть в новом окне",
     deleteTitle: "Удалить вложение",
     deleteDescription: "Вложение будет безвозвратно удалено из хранилища. Связанные ссылки в заметке больше не откроются. Это действие нельзя отменить.",
+    renameAria: "Переименовать вложение {{filename}}",
     deleteAria: "Удалить вложение {{filename}}",
   },
   tagsDialog: {

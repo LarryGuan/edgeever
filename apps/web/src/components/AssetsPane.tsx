@@ -16,6 +16,7 @@ import {
   Search,
   Grid,
   List,
+  Pencil,
   X,
   Loader2,
   Trash2,
@@ -29,6 +30,7 @@ import type { EdgeEverRepository } from "@/lib/repository";
 import { isPdfAttachment, type ResourceListItem } from "@edgeever/shared";
 import { PdfViewer } from "@/components/pdf/PdfViewer";
 import { PdfThumbnail } from "@/components/pdf/PdfThumbnail";
+import { FileDocumentRenameDialog } from "@/components/file-document/FileDocumentRenameDialog";
 import { AttachmentFileIcon } from "@/components/attachments/AttachmentFileIcon";
 import { AppConfirmDialog } from "@/components/dialogs/ConfirmDialogs";
 import { ExecutionCenterButton } from "@/components/execution/ExecutionCenterButton";
@@ -72,6 +74,7 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
   });
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [pdfPreview, setPdfPreview] = useState<ResourceListItem | null>(null);
+  const [renameTarget, setRenameTarget] = useState<ResourceListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ResourceListItem | null>(null);
 
   // Query resources
@@ -92,6 +95,15 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
     mutationFn: (resourceId: string) => repository.deleteResource(resourceId),
     onSuccess: async () => {
       setDeleteTarget(null);
+      await queryClient.invalidateQueries({ queryKey: ["resources"] });
+    },
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: ({ resourceId, filename }: { resourceId: string; filename: string }) =>
+      repository.renameResource(resourceId, filename),
+    onSuccess: async () => {
+      setRenameTarget(null);
       await queryClient.invalidateQueries({ queryKey: ["resources"] });
     },
   });
@@ -319,6 +331,21 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
                   key={resource.id}
                   className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md"
                 >
+                  <ButtonTooltip title={t("assets.renameAria", { filename: resource.filename || resource.id })}>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("assets.renameAria", { filename: resource.filename || resource.id })}
+                      className={`edgeever-reveal-on-touch absolute top-2 z-10 h-8 w-8 bg-card/90 text-slate-500 opacity-0 shadow-sm transition-opacity hover:bg-slate-100 hover:text-slate-900 focus:opacity-100 group-hover:opacity-100 focus-within:opacity-100 ${resource.role !== "primary" ? "right-12" : "right-2"}`}
+                      onClick={() => {
+                        renameMutation.reset();
+                        setRenameTarget(resource);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </ButtonTooltip>
                   {resource.role !== "primary" ? <ButtonTooltip title={t("assets.deleteAria", { filename: resource.filename || resource.id })}>
                     <Button
                       type="button"
@@ -460,6 +487,21 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
                   </div>
 
                   {/* Right Actions */}
+                  <ButtonTooltip title={t("assets.renameAria", { filename: resource.filename || resource.id })}>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("assets.renameAria", { filename: resource.filename || resource.id })}
+                      className="edgeever-reveal-on-touch h-8 w-8 text-slate-350 opacity-0 transition-all duration-150 hover:bg-slate-50 hover:text-slate-800 focus:opacity-100 group-hover:opacity-100 focus-within:opacity-100"
+                      onClick={() => {
+                        renameMutation.reset();
+                        setRenameTarget(resource);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </ButtonTooltip>
                   {resource.role !== "primary" ? <ButtonTooltip title={t("assets.deleteAria", { filename: resource.filename || resource.id })}>
                     <Button
                       type="button"
@@ -511,6 +553,21 @@ export const AssetsPane = ({ onClose, repository, onOpenExecutionCenter }: Asset
           onRequestClose={() => setPdfPreview(null)}
           onPrevious={pdfResources.length > 1 ? showPreviousPdf : undefined}
           onNext={pdfResources.length > 1 ? showNextPdf : undefined}
+        />
+      ) : null}
+      {renameTarget ? (
+        <FileDocumentRenameDialog
+          open
+          filename={renameTarget.filename || renameTarget.id}
+          pending={renameMutation.isPending}
+          error={renameMutation.isError ? t("fileNote.renameFailed") : null}
+          onOpenChange={(open) => {
+            if (!open) {
+              renameMutation.reset();
+              setRenameTarget(null);
+            }
+          }}
+          onRename={async (filename) => { await renameMutation.mutateAsync({ resourceId: renameTarget.id, filename }); }}
         />
       ) : null}
       {deleteTarget ? (

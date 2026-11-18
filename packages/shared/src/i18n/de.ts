@@ -2824,7 +2824,9 @@ export const de = {
   "fileNote": {
     "title": "File note", "loading": "Loading file…", "unavailable": "The primary file is unavailable.", "unknownType": "Unknown type",
     "readOnlyDescription": "This file can be downloaded or replaced. Preview and editing are not supported yet.", "download": "Download", "replace": "Replace file", "replacing": "Replacing…",
-    "replaceFailed": "The file could not be replaced. Refresh and try again."
+    "replaceFailed": "The file could not be replaced. Refresh and try again.",
+    "renameTitle": "Datei umbenennen", "renameDescription": "Ändert den Dateinamen, aber nicht die Erweiterung. Der Notiztitel bleibt unabhängig.", "filenameLabel": "Dateiname",
+    "renameFailed": "Die Datei konnte nicht umbenannt werden.", "previewBeta": "Beta-Vorschau"
   },
   "memoCard": {
     "yesterday": "Gestern",
@@ -2869,6 +2871,7 @@ export const de = {
     "openInNewWindow": "In neuem Fenster öffnen",
     "deleteTitle": "Anhang löschen",
     "deleteDescription": "Der Anhang wird dauerhaft aus dem Speicher gelöscht. Zugehörige Links in der Notiz können nicht mehr geöffnet werden. Dies kann nicht rückgängig gemacht werden.",
+    "renameAria": "Anhang {{filename}} umbenennen",
     "deleteAria": "Anhang {{filename}} löschen"
   },
   "tagsDialog": {

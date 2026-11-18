@@ -350,7 +350,13 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
       return { resource };
     }
     const result = await api.uploadMemoResource(memoId, file);
-    await putLocalResource(scope, { ...result.resource, memoTitle: null, memoExcerpt: null, memoDeleted: false });
+    const memo = await getLocalMemo(scope, memoId);
+    await putLocalResource(scope, {
+      ...result.resource,
+      memoTitle: memo?.title ?? null,
+      memoExcerpt: memo?.excerpt ?? null,
+      memoDeleted: memo?.isDeleted ?? false,
+    });
     return result;
   },
   async readResource(resourceId) {
@@ -383,25 +389,29 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
   },
   async listResources() {
     const local = await listLocalResources(scope);
-    if (local.resources.length > 0 || isOffline()) {
-      if (!isOffline()) void api.listResources().then((remote) => replaceLocalResources(scope, remote.resources)).catch(() => {});
+    if (isOffline()) return local;
+    try {
+      const remote = await api.listResources();
+      await replaceLocalResources(scope, remote.resources);
+      return listLocalResources(scope);
+    } catch {
       return local;
     }
-    const remote = await api.listResources();
-    await replaceLocalResources(scope, remote.resources);
-    return remote;
   },
   async listMemoResources(memoId) {
     const local = (await listLocalResources(scope)).resources.filter((resource) => resource.memoId === memoId);
     if (isOffline()) return { resources: local };
     try {
       const remote = await api.listMemoResources(memoId);
+      const memo = await getLocalMemo(scope, memoId);
+      const localById = new Map(local.map((resource) => [resource.id, resource]));
       for (const resource of remote.resources) {
+        const existing = localById.get(resource.id);
         await putLocalResource(scope, {
           ...resource,
-          memoTitle: null,
-          memoExcerpt: null,
-          memoDeleted: false,
+          memoTitle: memo?.title ?? existing?.memoTitle ?? null,
+          memoExcerpt: memo?.excerpt ?? existing?.memoExcerpt ?? null,
+          memoDeleted: memo?.isDeleted ?? existing?.memoDeleted ?? false,
         });
       }
       return remote;

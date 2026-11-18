@@ -1062,7 +1062,7 @@ describe("web repository resources", () => {
     }
   });
 
-  test("loads resources from the server on a cold mirror and refreshes them in the background later", async () => {
+  test("refreshes the resource mirror online without hiding pending local uploads", async () => {
     const restoreNetwork = installNetwork({ online: true });
     const lists = [
       { resources: [resourceFixture("res-1")], summary: { totalCount: 1, totalBytes: 4, imageCount: 0, attachmentCount: 1 } },
@@ -1074,10 +1074,29 @@ describe("web repository resources", () => {
       expect((await repository.listResources()).resources.map((resource) => resource.id)).toEqual(["res-1"]);
       await localDb.resources.put({ ...resourceFixture("local_resource_pending"), scope: SCOPE });
       const cached = await repository.listResources();
-      expect(cached.resources.map((resource) => resource.id).sort()).toEqual(["local_resource_pending", "res-1"]);
-      await tick(10);
+      expect(cached.resources.map((resource) => resource.id).sort()).toEqual(["local_resource_pending", "res-2"]);
       const stored = (await localDb.resources.where("scope").equals(SCOPE).toArray()).map((resource) => resource.id).sort();
       expect(stored).toEqual(["local_resource_pending", "res-2"]);
+    } finally {
+      restoreApi();
+      restoreNetwork();
+    }
+  });
+
+  test("keeps the source note title when memo resources refresh the local mirror", async () => {
+    const restoreNetwork = installNetwork({ online: true });
+    const memo = remoteMemoFixture("memo-1", { title: "Source note", excerpt: "Summary" });
+    await localDb.memos.put({ ...memo, scope: SCOPE });
+    const restoreApi = stubApi({
+      listMemoResources: async () => ({ resources: [resourceFixture("res-1", { memoId: "memo-1" })] }),
+    });
+    try {
+      await createWebRepository(SCOPE).listMemoResources("memo-1");
+      expect(await localDb.resources.get([SCOPE, "res-1"])).toMatchObject({
+        memoTitle: "Source note",
+        memoExcerpt: "Summary",
+        memoDeleted: false,
+      });
     } finally {
       restoreApi();
       restoreNetwork();

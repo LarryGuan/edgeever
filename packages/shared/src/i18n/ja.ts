@@ -2628,6 +2628,8 @@ export const ja = {
     title: "File note", loading: "Loading file…", unavailable: "The primary file is unavailable.", unknownType: "Unknown type",
     readOnlyDescription: "This file can be downloaded or replaced. Preview and editing are not supported yet.", download: "Download", replace: "Replace file", replacing: "Replacing…",
     replaceFailed: "The file could not be replaced. Refresh and try again.",
+    renameTitle: "ファイル名を変更", renameDescription: "拡張子は変更せず、ファイル名だけを変更します。ノートのタイトルは別に保持されます。", filenameLabel: "ファイル名",
+    renameFailed: "ファイル名を変更できませんでした。", previewBeta: "ベータプレビュー",
   },
   memoCard: {
     yesterday: "昨日",
@@ -2672,6 +2674,7 @@ export const ja = {
     openInNewWindow: "新しいウィンドウで開く",
     deleteTitle: "添付を削除",
     deleteDescription: "添付はストレージから完全に削除されます。ノート内の関連リンクは開けなくなります。この操作は取り消せません。",
+    renameAria: "添付 {{filename}} の名前を変更",
     deleteAria: "添付 {{filename}} を削除",
   },
   tagsDialog: {

@@ -2825,6 +2825,8 @@ export const fr = {
     title: "File note", loading: "Loading file…", unavailable: "The primary file is unavailable.", unknownType: "Unknown type",
     readOnlyDescription: "This file can be downloaded or replaced. Preview and editing are not supported yet.", download: "Download", replace: "Replace file", replacing: "Replacing…",
     replaceFailed: "The file could not be replaced. Refresh and try again.",
+    renameTitle: "Renommer le fichier", renameDescription: "Modifie le nom sans changer l’extension. Le titre de la note reste indépendant.", filenameLabel: "Nom du fichier",
+    renameFailed: "Impossible de renommer le fichier.", previewBeta: "Aperçu bêta",
   },
   memoCard: {
     yesterday: "Hier",
@@ -2869,6 +2871,7 @@ export const fr = {
     openInNewWindow: "Ouvrir dans une nouvelle fenêtre",
     deleteTitle: "Supprimer la pièce jointe",
     deleteDescription: "La pièce jointe sera définitivement supprimée du stockage. Les liens associés dans la note ne s'ouvriront plus. Cette action est irréversible.",
+    renameAria: "Renommer la pièce jointe {{filename}}",
     deleteAria: "Supprimer la pièce jointe {{filename}}"
   },
   tagsDialog: {

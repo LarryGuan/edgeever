@@ -2626,6 +2626,11 @@ export const enUS = {
     replace: "Replace file",
     replacing: "Replacing…",
     replaceFailed: "The file could not be replaced. Refresh and try again.",
+    renameTitle: "Rename file",
+    renameDescription: "Change the filename without changing its extension. The note title stays separate.",
+    filenameLabel: "Filename",
+    renameFailed: "The file could not be renamed. Try again.",
+    previewBeta: "Beta preview",
   },
   memoCard: {
     yesterday: "Yesterday",
@@ -2670,6 +2675,7 @@ export const enUS = {
     openInNewWindow: "Open in new window",
     deleteTitle: "Delete attachment",
     deleteDescription: "The attachment will be permanently removed from storage. Related links in the note will no longer open. This cannot be undone.",
+    renameAria: "Rename attachment {{filename}}",
     deleteAria: "Delete attachment {{filename}}",
   },
   tagsDialog: {

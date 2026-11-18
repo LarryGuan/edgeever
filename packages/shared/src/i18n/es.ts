@@ -2824,7 +2824,9 @@ export const es = {
   "fileNote": {
     "title": "File note", "loading": "Loading file…", "unavailable": "The primary file is unavailable.", "unknownType": "Unknown type",
     "readOnlyDescription": "This file can be downloaded or replaced. Preview and editing are not supported yet.", "download": "Download", "replace": "Replace file", "replacing": "Replacing…",
-    "replaceFailed": "The file could not be replaced. Refresh and try again."
+    "replaceFailed": "The file could not be replaced. Refresh and try again.",
+    "renameTitle": "Cambiar nombre del archivo", "renameDescription": "Cambia el nombre sin modificar la extensión. El título de la nota es independiente.", "filenameLabel": "Nombre del archivo",
+    "renameFailed": "No se pudo cambiar el nombre del archivo.", "previewBeta": "Vista previa beta"
   },
   "memoCard": {
     "yesterday": "Ayer",
@@ -2869,6 +2871,7 @@ export const es = {
     "openInNewWindow": "Abrir en una ventana nueva",
     "deleteTitle": "Eliminar archivo adjunto",
     "deleteDescription": "El archivo adjunto se eliminará permanentemente del almacenamiento. Los enlaces relacionados en la nota ya no se abrirán. Esta acción no se puede deshacer.",
+    "renameAria": "Cambiar nombre del archivo adjunto {{filename}}",
     "deleteAria": "Eliminar archivo adjunto {{filename}}"
   },
   "tagsDialog": {
