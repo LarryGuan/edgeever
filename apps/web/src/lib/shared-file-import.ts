@@ -20,6 +20,13 @@ const escapeLabel = (value: string) => value.replace(/[\\[\]]/g, "\\$&");
 export const sharedFileAttachmentMarkdown = (filename: string, url: string) =>
   `[附件：${escapeLabel(filename || "file")}](${url})`;
 
+const escapeInlineCode = (value: string) => value.replace(/`/g, "\\`");
+
+export const sharedFileUploadPendingMarkdown = (filename: string) => {
+  const label = escapeInlineCode(filename.trim() || "file");
+  return `<!-- edgeever-upload-pending-v1 -->\n\n> 文件正在上传 / Upload in progress: \`${label}\`\n>\n> 如果上传被中断，请删除本笔记后重新上传。 / If the upload is interrupted, delete this note and upload the file again.`;
+};
+
 const isImageFile = (filename: string, mimeType: string) =>
   mimeType.toLowerCase().startsWith("image/") || IMAGE_EXTENSIONS.has(extensionOf(filename));
 
@@ -59,6 +66,7 @@ export const createSharedFileMemo = async <TMemo extends SharedMemo>(input: {
     content: { contentJson: TiptapDoc; contentMarkdown: string },
   ) => Promise<{ memo: TMemo }>;
   deleteMemo?: (memoId: string) => Promise<unknown>;
+  onMemoCreated?: (memo: TMemo) => void | Promise<void>;
 }) => {
   const title = sharedFileTitle(input.filename);
   const extension = extensionOf(input.filename);
@@ -75,10 +83,11 @@ export const createSharedFileMemo = async <TMemo extends SharedMemo>(input: {
   const created = await input.createMemo({
     notebookId: input.notebookId,
     title,
-    contentMarkdown: "",
+    contentMarkdown: sharedFileUploadPendingMarkdown(input.filename),
     tags: [],
   });
   try {
+    await input.onMemoCreated?.(created.memo);
     const prepared = input.prepareFile ? await input.prepareFile(input.file) : input.file;
     const resource = await input.uploadResource(created.memo.id, prepared);
     const filename = resource.filename || prepared.name || input.filename;

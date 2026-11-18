@@ -125,6 +125,7 @@ import {
 import { useWorkspaceSyncLifecycle } from "@/hooks/useWorkspaceSyncLifecycle";
 import { paneEnterMotion } from "@/lib/motion";
 import { WorkspaceMotionProvider } from "./WorkspaceMotionProvider";
+import { FileUploadTaskDock, type FileUploadTask } from "./FileUploadTaskDock";
 import { useWorkspaceRoute } from "@/hooks/useWorkspaceRoute";
 import { useNoteProse } from "@/hooks/useNoteProse";
 import { useWorkspacePreferences } from "@/hooks/useWorkspacePreferences";
@@ -285,6 +286,10 @@ export const WorkspaceApp = ({
   const [wechatImportFailureId, setWeChatImportFailureId] = useState<string | null>(null);
   const [wechatImportsInProgress, setWeChatImportsInProgress] = useState(0);
   const [sharedFileImportsInProgress, setSharedFileImportsInProgress] = useState(0);
+  const [fileUploadTasks, setFileUploadTasks] = useState<FileUploadTask[]>([]);
+  const fileUploadControllersRef = useRef(new Map<string, AbortController>());
+  const fileUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const fileUploadTargetNotebookIdRef = useRef<string | null>(null);
   const [pendingCatalogTrustPluginIds, setPendingCatalogTrustPluginIds] = useState<string[]>([]);
   const [isExportingSelectedMemos, setIsExportingSelectedMemos] = useState(false);
   const [selectedMarkdownExportProgress, setSelectedMarkdownExportProgress] = useState<MarkdownExportProgress>({
@@ -2154,9 +2159,26 @@ export const WorkspaceApp = ({
       .then(createDiagramMemo);
   };
 
-  const handleImportMarkdownFiles = async (files: File[]) => {
-    const targetNotebookId = createMemoNotebookId;
-    let countedSharedFileImport = false;
+  const updateFileUploadTask = (taskId: string, patch: Partial<FileUploadTask>) => {
+    setFileUploadTasks((tasks) => tasks.map((task) => task.id === taskId ? { ...task, ...patch } : task));
+  };
+
+  const handleCancelFileUpload = (taskId: string) => {
+    fileUploadControllersRef.current.get(taskId)?.abort();
+  };
+
+  const handleDismissFileUpload = (taskId: string) => {
+    setFileUploadTasks((tasks) => tasks.filter((task) => task.id !== taskId));
+  };
+
+  const handleOpenFileUploadPicker = () => {
+    if (!createMemoNotebookId || memoView === "trash") return;
+    fileUploadTargetNotebookIdRef.current = createMemoNotebookId;
+    fileUploadInputRef.current?.click();
+  };
+
+  const handleImportMarkdownFiles = async (files: File[], requestedNotebookId?: string | null) => {
+    const targetNotebookId = requestedNotebookId ?? createMemoNotebookId;
 
     if (!targetNotebookId || memoView === "trash") return;
     if (files.length !== 1) {
@@ -2169,6 +2191,8 @@ export const WorkspaceApp = ({
 
     const [file] = files;
 
+    let taskId: string | null = null;
+    let controller: AbortController | null = null;
     try {
       setTemplatesOpen(false);
       setMobileBottomNavActive("home");
@@ -2185,8 +2209,16 @@ export const WorkspaceApp = ({
       }
 
       if (isBrowserOffline()) throw new Error("File notes require a connection for the initial upload.");
-      setSharedFileImportsInProgress((count) => count + 1);
-      countedSharedFileImport = true;
+      taskId = globalThis.crypto?.randomUUID?.() ?? `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      controller = new AbortController();
+      fileUploadControllersRef.current.set(taskId, controller);
+      setFileUploadTasks((tasks) => [...tasks, {
+        id: taskId!,
+        filename: file.name,
+        byteSize: file.size,
+        uploadedBytes: 0,
+        status: "preparing",
+      }]);
       const memo = await createSharedFileMemo({
         notebookId: targetNotebookId,
         filename: file.name,
@@ -2196,7 +2228,15 @@ export const WorkspaceApp = ({
           ? (await compressImageForUpload(input)).file
           : input),
         uploadResource: async (memoId, uploadFile) => {
-          const { resource } = await api.uploadMemoResource(memoId, uploadFile);
+          updateFileUploadTask(taskId!, { status: "uploading", byteSize: uploadFile.size });
+          const { resource } = await api.uploadMemoResource(memoId, uploadFile, {
+            signal: controller!.signal,
+            onProgress: (uploadedBytes, byteSize) => updateFileUploadTask(taskId!, {
+              status: "uploading",
+              uploadedBytes,
+              byteSize,
+            }),
+          });
           return { url: resource.url, filename: resource.filename };
         },
         updateMemo: async (created, content) => {
@@ -2212,20 +2252,46 @@ export const WorkspaceApp = ({
           });
         },
         deleteMemo: (memoId) => api.deleteMemo(memoId, { permanent: true }),
+        onMemoCreated: (created) => updateFileUploadTask(taskId!, { memoId: created.id }),
       });
       await putLocalMemo(localDataScope, memo);
       notifyRepositoryMutation(localDataScope, { type: "note.created", note: memo });
-      revealCreatedMemo(memo);
+      cacheMemoDetail(queryClient, memo, "notebook");
+      updateMemoSummaryInLists(queryClient, memoToSummary(memo));
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["memos"], refetchType: "inactive" }),
+        queryClient.invalidateQueries({ queryKey: ["notebooks"], refetchType: "inactive" }),
+      ]);
+      updateFileUploadTask(taskId, {
+        status: "completed",
+        memoId: memo.id,
+      });
     } catch {
       creatingMemoSelectionRef.current = false;
-      setAppNoticeDialog({
-        title: t("memoList.importMarkdownFailedTitle"),
-        description: t("memoList.importMarkdownReadFailed"),
-      });
-    } finally {
-      if (countedSharedFileImport) {
-        setSharedFileImportsInProgress((count) => Math.max(0, count - 1));
+      if (taskId) {
+        updateFileUploadTask(taskId, { status: controller?.signal.aborted ? "cancelled" : "failed" });
       }
+      if (!controller?.signal.aborted) {
+        setAppNoticeDialog({
+          title: t("memoList.importMarkdownFailedTitle"),
+          description: t("memoList.importMarkdownReadFailed"),
+        });
+      }
+    } finally {
+      creatingMemoSelectionRef.current = false;
+      if (taskId) fileUploadControllersRef.current.delete(taskId);
+    }
+  };
+
+  const handleOpenFileUploadMemo = async (memoId: string) => {
+    try {
+      const { memo } = await api.getMemo(memoId);
+      revealCreatedMemo(memo);
+    } catch {
+      setAppNoticeDialog({
+        title: t("memoList.openMemo"),
+        description: t("workspaceDialogs.openMemoFailed"),
+      });
     }
   };
 
@@ -3442,7 +3508,27 @@ export const WorkspaceApp = ({
   return (
     <WorkspaceMotionProvider>
       <div className="edgeever-workspace-shell flex h-[100dvh] overflow-hidden text-slate-950">
+      <input
+        ref={fileUploadInputRef}
+        type="file"
+        className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          const targetNotebookId = fileUploadTargetNotebookIdRef.current;
+          event.currentTarget.value = "";
+          fileUploadTargetNotebookIdRef.current = null;
+          if (file && targetNotebookId) void handleImportMarkdownFiles([file], targetNotebookId);
+        }}
+      />
       <DesktopAttachmentWritebacks scope={localDataScope} />
+      <FileUploadTaskDock
+        tasks={fileUploadTasks}
+        onCancel={handleCancelFileUpload}
+        onDismiss={handleDismissFileUpload}
+        onOpen={(memoId) => void handleOpenFileUploadMemo(memoId)}
+      />
       {(wechatImportsInProgress > 0 || sharedFileImportsInProgress > 0) && (
         <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center" role="status" aria-live="polite">
           <div className="rounded-full border border-slate-200 bg-card px-4 py-2 text-sm font-medium text-slate-700 shadow-lg">
@@ -3501,6 +3587,7 @@ export const WorkspaceApp = ({
                   isCreatingMemo={createMemoMutation.isPending}
                   onSelect={handleSelectNotebook}
                   onCreateMemo={handleCreateMemo}
+                  onUploadFile={handleOpenFileUploadPicker}
                   onCreateNotebook={handleCreateNotebook}
                   onRenameNotebook={handleRenameNotebook}
                   onEditNotebookAppearance={setAppearanceNotebook}
@@ -4240,6 +4327,7 @@ export const WorkspaceApp = ({
           canCreateMemo={canCreateMemo && memoView !== "trash"}
           isCreating={createMemoMutation.isPending}
           onCreateMemo={handleCreateMemo}
+          onUploadFile={handleOpenFileUploadPicker}
           onHome={handleMobileHome}
           onOpenSettings={handleOpenSettings}
         />

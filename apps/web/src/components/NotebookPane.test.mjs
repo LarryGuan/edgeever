@@ -54,6 +54,8 @@ test("lists diagram note types in the create menu without beta badges", () => {
   expect(createTypeMenu).toContain('onCreateMemo("flowchart")');
   expect(createTypeMenu).toContain('onCreateMemo("architecture")');
   expect(createTypeMenu).toContain('onCreateMemo("table")');
+  expect(createTypeMenu).toContain("onUploadFile");
+  expect(createTypeMenu).toContain('t("memoList.uploadFile")');
   expect(diagramSection).not.toContain("DiagramBetaBadge");
   expect(diagramSection).not.toContain("Beta");
   expect(createTypeMenu).toContain("Beta");

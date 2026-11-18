@@ -385,6 +385,42 @@ describe("EdgeEver client HTTP contract", () => {
     expect(calls[0].init.headers.get("Content-Type")).toBeNull();
   });
 
+  test("reports file-note progress and aborts the multipart session when cancelled", async () => {
+    const calls = [];
+    const progress = [];
+    const controller = new AbortController();
+    const client = createEdgeEverClient({
+      fetch: async (input, init) => {
+        const path = String(input);
+        calls.push({ path, method: init.method });
+        if (path.endsWith("/resource-uploads") && init.method === "POST") {
+          return jsonResponse({ upload: { id: "upload_cancel", partSize: 2, partCount: 2, byteSize: 3 } }, { status: 201 });
+        }
+        if (path.endsWith("/parts/1")) {
+          return jsonResponse({ part: { partNumber: 1, byteSize: 2 } });
+        }
+        if (init.method === "DELETE") return jsonResponse({ ok: true });
+        throw new Error(`Unexpected request: ${init.method} ${path}`);
+      },
+    });
+    const file = new File(["abc"], "report.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+
+    await expect(client.uploadMemoResource("memo_1", file, {
+      signal: controller.signal,
+      onProgress: (uploadedBytes, totalBytes) => {
+        progress.push([uploadedBytes, totalBytes]);
+        controller.abort();
+      },
+    })).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(progress).toEqual([[2, 3]]);
+    expect(calls.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      "POST /api/v1/memos/memo_1/resource-uploads",
+      "PUT /api/v1/resource-uploads/upload_cancel/parts/1",
+      "DELETE /api/v1/resource-uploads/upload_cancel",
+    ]);
+  });
+
   test("replaces resource content with a multipart concurrency baseline", async () => {
     let request;
     const client = createEdgeEverClient({

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { FILE_ATTACHMENT_NODE_TYPE, PDF_ATTACHMENT_NODE_TYPE } from "@edgeever/shared";
-import { createSharedFileMemo, sharedFileTitle } from "./shared-file-import.ts";
+import { createSharedFileMemo, sharedFileTitle, sharedFileUploadPendingMarkdown } from "./shared-file-import.ts";
 
 const memo = {
   id: "memo_1",
@@ -12,6 +12,13 @@ const memo = {
 };
 
 describe("shared file note", () => {
+  test("seeds non-Markdown notes with a recoverable upload marker", () => {
+    const markdown = sharedFileUploadPendingMarkdown("report`final.docx");
+    expect(markdown).toContain("edgeever-upload-pending-v1");
+    expect(markdown).toContain("report\\`final.docx");
+    expect(markdown).toContain("Upload in progress");
+  });
+
   test("uses the filename without its extension as the title", () => {
     expect(sharedFileTitle("云晰科技爆单键盘项目功能梳理表.xlsx")).toBe("云晰科技爆单键盘项目功能梳理表");
     expect(sharedFileTitle("notes.md")).toBe("notes");
@@ -100,15 +107,21 @@ describe("shared file note", () => {
 
   test("removes the empty note when the attachment cannot be saved", async () => {
     const deleted = [];
+    let initialContent = "";
     await expect(createSharedFileMemo({
       notebookId: "nb_inbox",
       filename: "sheet.xlsx",
       file: new File(["x"], "sheet.xlsx"),
-      createMemo: async () => ({ memo }),
+      createMemo: async (input) => {
+        initialContent = input.contentMarkdown;
+        return { memo: { ...memo, contentMarkdown: input.contentMarkdown } };
+      },
       uploadResource: async () => { throw new Error("offline"); },
       updateMemo: async () => { throw new Error("should not update"); },
       deleteMemo: async (id) => { deleted.push(id); },
     })).rejects.toThrow("offline");
+    expect(initialContent).toContain("edgeever-upload-pending-v1");
+    expect(initialContent).not.toBe("");
     expect(deleted).toEqual(["memo_1"]);
   });
 });

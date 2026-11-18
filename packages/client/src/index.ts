@@ -128,9 +128,15 @@ export type MultipartResourceUploadSource = {
   mimeType: string;
   byteSize: number;
   readPart: (start: number, end: number) => Promise<Blob | Uint8Array<ArrayBuffer>>;
+  signal?: AbortSignal;
   /** Importers use this to distinguish an uncertain commit from a failed part. */
   onBeforeComplete?: () => void | Promise<void>;
   onPartUploaded?: (byteSize: number) => void;
+};
+
+export type ResourceUploadOptions = {
+  signal?: AbortSignal;
+  onProgress?: (uploadedBytes: number, totalBytes: number) => void;
 };
 
 export type InstanceHealth = {
@@ -546,6 +552,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
   };
 
   const uploadMemoResourceParts = async (memoId: string, source: MultipartResourceUploadSource) => {
+    throwIfAborted(source.signal);
     const filename = source.filename.trim() || "attachment";
     const mimeType = source.mimeType || "application/octet-stream";
     const { upload } = await request<ResourceUploadResponse>(
@@ -553,11 +560,13 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       {
         method: "POST",
         body: JSON.stringify({ filename, mimeType, byteSize: source.byteSize }),
+        signal: source.signal,
       },
     );
 
     try {
       for (let partNumber = 1; partNumber <= upload.partCount; partNumber += 1) {
+        throwIfAborted(source.signal);
         const start = (partNumber - 1) * upload.partSize;
         const chunk = await source.readPart(start, Math.min(start + upload.partSize, source.byteSize));
         let attempt = 0;
@@ -569,11 +578,13 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
                 method: "PUT",
                 headers: { "Content-Type": "application/octet-stream" },
                 body: chunk,
+                signal: source.signal,
               },
             );
             source.onPartUploaded?.(Math.min(partNumber * upload.partSize, source.byteSize));
             break;
           } catch (error) {
+            throwIfAborted(source.signal);
             attempt += 1;
             const retryable = !(error instanceof ApiRequestError)
               || error.status === 408
@@ -584,10 +595,11 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
           }
         }
       }
+      throwIfAborted(source.signal);
       await source.onBeforeComplete?.();
       return await request<ResourceResponse>(
         `/api/v1/resource-uploads/${encodeURIComponent(upload.id)}/complete`,
-        { method: "POST", body: JSON.stringify({}) },
+        { method: "POST", body: JSON.stringify({}), signal: source.signal },
       );
     } catch (error) {
       await request<{ ok: true }>(`/api/v1/resource-uploads/${encodeURIComponent(upload.id)}`, {
@@ -596,16 +608,6 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       throw error;
     }
   };
-
-  const uploadMemoResourceMultipart = (memoId: string, file: Blob) =>
-    uploadMemoResourceParts(memoId, {
-      filename: "name" in file && typeof file.name === "string" && file.name.trim()
-        ? file.name
-        : "attachment",
-      mimeType: file.type || "application/octet-stream",
-      byteSize: file.size,
-      readPart: async (start, end) => file.slice(start, end),
-    });
 
   const createResourceMultipartSink = (upload: ResourceUploadResponse["upload"]) => {
     let partNumber = 1;
@@ -1855,11 +1857,21 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       body: image,
     }),
 
-    uploadMemoResource: (memoId: string, file: Blob | FormData) => {
+    uploadMemoResource: (memoId: string, file: Blob | FormData, options: ResourceUploadOptions = {}) => {
       // Small files do not benefit from an upload session's three round trips.
       // Keep large attachments on the bounded-memory, resumable path.
-      if (!(file instanceof FormData) && file.size > MAX_SINGLE_REQUEST_UPLOAD_BYTES) {
-        return uploadMemoResourceMultipart(memoId, file);
+      if (!(file instanceof FormData) && (file.size > MAX_SINGLE_REQUEST_UPLOAD_BYTES || options.onProgress)) {
+        const filename = "name" in file && typeof file.name === "string" && file.name.trim()
+          ? file.name
+          : "attachment";
+        return uploadMemoResourceParts(memoId, {
+          filename,
+          mimeType: file.type || "application/octet-stream",
+          byteSize: file.size,
+          readPart: async (start, end) => file.slice(start, end),
+          signal: options.signal,
+          onPartUploaded: (uploadedBytes) => options.onProgress?.(uploadedBytes, file.size),
+        });
       }
       const form = file instanceof FormData ? file : new FormData();
       if (!(file instanceof FormData)) {
@@ -1871,6 +1883,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       return request<ResourceResponse>(`/api/v1/memos/${encodeURIComponent(memoId)}/resources`, {
         method: "POST",
         body: form,
+        signal: options.signal,
       });
     },
 

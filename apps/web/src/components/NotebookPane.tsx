@@ -29,6 +29,7 @@ import {
   Download,
   RotateCcw,
   FileText,
+  FileUp,
   Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -312,7 +313,13 @@ const SidebarRailButton = ({
   </Tooltip>
 );
 
-const CreateMemoTypeItems = ({ onCreateMemo }: { onCreateMemo: (kind?: NoteCreateKind) => void }) => {
+const CreateMemoTypeItems = ({
+  onCreateMemo,
+  onUploadFile,
+}: {
+  onCreateMemo: (kind?: NoteCreateKind) => void;
+  onUploadFile: () => void;
+}) => {
   const { t } = useTranslation();
 
   return (
@@ -320,6 +327,10 @@ const CreateMemoTypeItems = ({ onCreateMemo }: { onCreateMemo: (kind?: NoteCreat
       <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo()}>
         <FileText className="h-4 w-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{t("diagram.normalNote")}</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={onUploadFile}>
+        <FileUp className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{t("memoList.uploadFile")}</span>
       </DropdownMenuItem>
       <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("mind-map")}>
         <GitFork className="h-4 w-4 shrink-0" />
@@ -494,6 +505,7 @@ export const NotebookPane = ({
   onEmptyTrash,
   onOpenSettings,
   onCreateMemo,
+  onUploadFile,
   canCreateMemo,
   isCreatingMemo,
   syncSummary,
@@ -529,6 +541,7 @@ export const NotebookPane = ({
   onEmptyTrash: () => void;
   onOpenSettings: () => void;
   onCreateMemo: (kind?: NoteCreateKind) => void;
+  onUploadFile: () => void;
   canCreateMemo: boolean;
   isCreatingMemo: boolean;
   syncSummary: SyncQueueSummary;
@@ -763,7 +776,7 @@ export const NotebookPane = ({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" sideOffset={8} className="w-52">
-              <CreateMemoTypeItems onCreateMemo={onCreateMemo} />
+              <CreateMemoTypeItems onCreateMemo={onCreateMemo} onUploadFile={onUploadFile} />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -930,7 +943,7 @@ export const NotebookPane = ({
                   <TooltipContent side="right">{t("diagram.createType")}</TooltipContent>
                 </Tooltip>
                 <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-52">
-                  <CreateMemoTypeItems onCreateMemo={onCreateMemo} />
+                  <CreateMemoTypeItems onCreateMemo={onCreateMemo} onUploadFile={onUploadFile} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
