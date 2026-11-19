@@ -4,7 +4,6 @@ export type FileDocumentPreviewKind = "pdf" | "image" | "audio" | "video" | "doc
 
 type Previewer = {
   kind: Exclude<FileDocumentPreviewKind, "download">;
-  beta?: boolean;
   matches: (resource: Pick<Resource, "filename" | "mimeType">) => boolean;
 };
 
@@ -27,7 +26,6 @@ export const FILE_DOCUMENT_PREVIEWERS: readonly Previewer[] = [
   },
   {
     kind: "docx",
-    beta: true,
     matches: (resource) => resource.filename?.trim().toLowerCase().endsWith(".docx") === true,
   },
   {
@@ -43,7 +41,7 @@ export const FILE_DOCUMENT_PREVIEWERS: readonly Previewer[] = [
 
 export const resolveFileDocumentPreviewer = (resource: Pick<Resource, "filename" | "mimeType">) =>
   FILE_DOCUMENT_PREVIEWERS.find((previewer) => previewer.matches(resource))
-  ?? { kind: "download" as const, beta: false };
+  ?? { kind: "download" as const };
 
 export type FileDocumentFilenameParts = {
   stem: string;

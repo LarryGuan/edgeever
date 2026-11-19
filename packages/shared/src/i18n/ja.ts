@@ -2625,7 +2625,10 @@ export const ja = {
     manualSyncOffline: "オフラインではノートを同期できません",
   },
   fileNote: {
-    title: "File note", loading: "Loading file…", unavailable: "The primary file is unavailable.", unknownType: "Unknown type",
+    title: "File note",
+    toolbar: "File tools", fileInfo: "File information", fileInfoDescription: "Source-file information is read-only and changes when the file is replaced.",
+    downloadOriginal: "Download original file", sourceFilename: "Source filename", mimeType: "MIME type", fileSize: "File size", updatedAt: "Updated", sha256: "SHA-256", unavailableValue: "Not available",
+    loading: "Loading file…", unavailable: "The primary file is unavailable.", unknownType: "Unknown type",
     readOnlyDescription: "This file can be downloaded or replaced. Preview and editing are not supported yet.", download: "Download", replace: "Replace file", replacing: "Replacing…",
     replaceFailed: "The file could not be replaced. Refresh and try again.",
     renameTitle: "ファイル名を変更", renameDescription: "拡張子は変更せず、ファイル名だけを変更します。ノートのタイトルは別に保持されます。", filenameLabel: "ファイル名",

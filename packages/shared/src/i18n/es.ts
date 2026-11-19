@@ -2822,7 +2822,10 @@ export const es = {
     "manualSyncOffline": "No se pueden sincronizar notas sin conexión"
   },
   "fileNote": {
-    "title": "File note", "loading": "Loading file…", "unavailable": "The primary file is unavailable.", "unknownType": "Unknown type",
+    "title": "File note",
+    "toolbar": "File tools", "fileInfo": "File information", "fileInfoDescription": "Source-file information is read-only and changes when the file is replaced.",
+    "downloadOriginal": "Download original file", "sourceFilename": "Source filename", "mimeType": "MIME type", "fileSize": "File size", "updatedAt": "Updated", "sha256": "SHA-256", "unavailableValue": "Not available",
+    "loading": "Loading file…", "unavailable": "The primary file is unavailable.", "unknownType": "Unknown type",
     "readOnlyDescription": "This file can be downloaded or replaced. Preview and editing are not supported yet.", "download": "Download", "replace": "Replace file", "replacing": "Replacing…",
     "replaceFailed": "The file could not be replaced. Refresh and try again.",
     "renameTitle": "Cambiar nombre del archivo", "renameDescription": "Cambia el nombre sin modificar la extensión. El título de la nota es independiente.", "filenameLabel": "Nombre del archivo",

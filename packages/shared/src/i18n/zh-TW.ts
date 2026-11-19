@@ -2636,7 +2636,10 @@ export const zhTW = {
     manualSyncOffline: "離線時無法同步筆記",
   },
   fileNote: {
-    title: "檔案筆記", loading: "正在載入檔案…", unavailable: "主要檔案不可用。", unknownType: "未知類型",
+    title: "檔案筆記",
+    toolbar: "檔案工具", fileInfo: "檔案資訊", fileInfoDescription: "來源檔案資訊為唯讀；替換檔案後會隨新檔案更新。",
+    downloadOriginal: "下載原始檔案", sourceFilename: "來源檔名", mimeType: "MIME 類型", fileSize: "檔案大小", updatedAt: "更新時間", sha256: "SHA-256", unavailableValue: "無",
+    loading: "正在載入檔案…", unavailable: "主要檔案不可用。", unknownType: "未知類型",
     readOnlyDescription: "目前支援下載或取代檔案，暫不支援線上預覽和編輯。", download: "下載", replace: "取代檔案", replacing: "正在取代…",
     replaceFailed: "檔案取代失敗，請重新整理後再試。",
     renameTitle: "重新命名檔案", renameDescription: "只修改檔案名稱，不改變副檔名；筆記標題保持獨立。", filenameLabel: "檔案名稱",

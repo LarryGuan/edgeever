@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Check, ChevronLeft, Download, Loader2, Pencil, Share2, Upload } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, Download, Info, Loader2, Share2, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { AttachmentFileIcon } from "@/components/attachments/AttachmentFileIcon";
 import { ShareMemoDialog } from "@/components/dialogs/ShareMemoDialog";
 import { IconTooltip } from "@/components/editor/EditorPaneChrome";
 import { createLocalEditSession } from "@/components/editor/editor-pane-helpers";
+import { FileDocumentInfoDialog } from "@/components/file-document/FileDocumentInfoDialog";
 import { FileDocumentPreview } from "@/components/file-document/FileDocumentPreview";
-import { FileDocumentRenameDialog } from "@/components/file-document/FileDocumentRenameDialog";
 import { MemoEditorMetadataRow } from "@/components/MemoEditorMetadataRow";
 import { MEMO_EDITOR_METADATA_ROW_CLASS_NAME, MEMO_EDITOR_TOP_ROW_CLASS_NAME } from "@/components/MemoEditorChromeDensity";
 import { MemoEditorTopRowLeading } from "@/components/MemoEditorTopRowLeading";
@@ -16,8 +15,6 @@ import { MemoTitleInput } from "@/components/MemoTitleInput";
 import { Button } from "@/components/ui/button";
 import { getNotebookMoveOptions } from "@/lib/app-helpers";
 import { toDesktopResourceDownloadUrl } from "@/lib/desktop-resources";
-import { resolveFileDocumentPreviewer } from "@/lib/file-document-presentation";
-import { formatBytes } from "@/lib/format-bytes";
 import type { EdgeEverRepository } from "@/lib/repository";
 import { parseTagsText } from "@/lib/utils";
 import type { MemoDetail, Notebook, Resource } from "@edgeever/shared";
@@ -64,11 +61,9 @@ export const FileDocumentPane = ({
   const [mobileNotebookPickerOpen, setMobileNotebookPickerOpen] = useState(false);
   const [notebookUpdatePending, setNotebookUpdatePending] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [fileInfoOpen, setFileInfoOpen] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [replaceError, setReplaceError] = useState(false);
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [renameError, setRenameError] = useState<string | null>(null);
   const notebookOptions = useMemo(() => getNotebookMoveOptions(notebooks), [notebooks]);
   const resourcesQuery = useQuery({
     queryKey: ["memo-resources", memo.id],
@@ -79,7 +74,6 @@ export const FileDocumentPane = ({
   const primary = resources.find((resource) => resource.role === "primary")
     ?? resources.find((resource) => resource.id === expectedId)
     ?? null;
-  const previewer = primary ? resolveFileDocumentPreviewer(primary) : null;
 
   useEffect(() => {
     const fields = metadataFieldsFromMemo(memo);
@@ -202,24 +196,6 @@ export const FileDocumentPane = ({
     }
   };
 
-  const renameFile = async (filename: string) => {
-    if (!primary || renaming) return;
-    setRenaming(true);
-    setRenameError(null);
-    try {
-      const result = await repository.renameResource(primary.id, filename);
-      queryClient.setQueryData<{ resources: Resource[] }>(["memo-resources", memo.id], (current) => ({
-        resources: (current?.resources ?? resources).map((resource) => resource.id === result.resource.id ? result.resource : resource),
-      }));
-      await queryClient.invalidateQueries({ queryKey: ["resources"] });
-      setRenameOpen(false);
-    } catch {
-      setRenameError(t("fileNote.renameFailed"));
-    } finally {
-      setRenaming(false);
-    }
-  };
-
   const saveLabel = savePhase === "saving"
     ? t("editor.saveState.saving")
     : savePhase === "error"
@@ -280,52 +256,6 @@ export const FileDocumentPane = ({
           />
         </div>
 
-        {primary ? (
-          <div className="flex min-h-12 items-center gap-3 border-t border-slate-100 px-4 py-1.5">
-            <AttachmentFileIcon mimeType={primary.mimeType} filename={primary.filename} className="h-5 w-5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-800">{primary.filename || memo.title || primary.id}</p>
-              <p className="truncate text-xs text-slate-500">{formatBytes(primary.byteSize)} · {primary.mimeType || t("fileNote.unknownType")}</p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <IconTooltip label={t("fileNote.download")}>
-                <Button asChild variant="ghost" size="icon" className="h-8 w-8">
-                  <a href={toDesktopResourceDownloadUrl(primary.url, primary.filename || memo.title || "file")} download={primary.filename || undefined} aria-label={t("fileNote.download")}>
-                    <Download className="h-4 w-4" />
-                  </a>
-                </Button>
-              </IconTooltip>
-              {!readOnly ? (
-                <IconTooltip label={t("editor.resourceActions.rename")}>
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label={t("editor.resourceActions.rename")} onClick={() => {
-                    setRenameError(null);
-                    setRenameOpen(true);
-                  }}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </IconTooltip>
-              ) : null}
-              {!readOnly ? (
-                <>
-                  <input
-                    ref={inputRef}
-                    type="file"
-                    className="sr-only"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) void replaceFile(file);
-                    }}
-                  />
-                  <IconTooltip label={replacing ? t("fileNote.replacing") : t("fileNote.replace")}>
-                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" disabled={!primary.sha256 || replacing} aria-label={t("fileNote.replace")} onClick={() => inputRef.current?.click()}>
-                      {replacing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    </Button>
-                  </IconTooltip>
-                </>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
         {replaceError ? <p className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-sm text-rose-700">{t("fileNote.replaceFailed")}</p> : null}
       </header>
 
@@ -336,13 +266,44 @@ export const FileDocumentPane = ({
             {t("fileNote.loading")}
           </div>
         ) : primary ? (
-          previewer?.kind === "download" ? (
-            <div className="flex h-full items-center justify-center p-6 text-center text-sm leading-6 text-slate-500">
-              {t("fileNote.readOnlyDescription")}
-            </div>
-          ) : (
-            <FileDocumentPreview resource={primary} readResource={repository.readResource} />
-          )
+          <FileDocumentPreview
+            resource={primary}
+            readResource={repository.readResource}
+            toolbar={(
+              <>
+                <IconTooltip label={t("fileNote.fileInfo")}>
+                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label={t("fileNote.fileInfo")} onClick={() => setFileInfoOpen(true)}>
+                    <Info className="h-4 w-4" />
+                  </Button>
+                </IconTooltip>
+                <IconTooltip label={t("fileNote.downloadOriginal")}>
+                  <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                    <a href={toDesktopResourceDownloadUrl(primary.url, primary.filename || memo.title || "file")} download={primary.filename || undefined} aria-label={t("fileNote.downloadOriginal")}>
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </Button>
+                </IconTooltip>
+                {!readOnly ? (
+                  <>
+                    <input
+                      ref={inputRef}
+                      type="file"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        if (file) void replaceFile(file);
+                      }}
+                    />
+                    <IconTooltip label={replacing ? t("fileNote.replacing") : t("fileNote.replace")}>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" disabled={!primary.sha256 || replacing} aria-label={t("fileNote.replace")} onClick={() => inputRef.current?.click()}>
+                        {replacing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      </Button>
+                    </IconTooltip>
+                  </>
+                ) : null}
+              </>
+            )}
+          />
         ) : (
           <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-500">
             {t("fileNote.unavailable")}
@@ -350,19 +311,7 @@ export const FileDocumentPane = ({
         )}
       </div>
 
-      {primary ? (
-        <FileDocumentRenameDialog
-          open={renameOpen}
-          filename={primary.filename || primary.id}
-          pending={renaming}
-          error={renameError}
-          onOpenChange={(open) => {
-            setRenameOpen(open);
-            if (!open) setRenameError(null);
-          }}
-          onRename={renameFile}
-        />
-      ) : null}
+      {primary ? <FileDocumentInfoDialog open={fileInfoOpen} resource={primary} onOpenChange={setFileInfoOpen} /> : null}
       <ShareMemoDialog memoId={memo.id} open={shareOpen} onOpenChange={setShareOpen} />
     </section>
   );

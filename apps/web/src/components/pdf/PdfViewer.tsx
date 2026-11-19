@@ -14,7 +14,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AttachmentExternalLink } from "@/components/attachments/AttachmentExternalLink";
@@ -169,6 +169,8 @@ export type PdfViewerProps = {
   onRequestClose?: () => void;
   onPrevious?: () => void;
   onNext?: () => void;
+  mode?: "attachment" | "file-note";
+  toolbarLeading?: ReactNode;
 };
 
 export const PdfViewer = ({
@@ -184,6 +186,8 @@ export const PdfViewer = ({
   onRequestClose,
   onPrevious,
   onNext,
+  mode = "attachment",
+  toolbarLeading,
 }: PdfViewerProps) => {
   const { t } = useTranslation();
   const resolvedUrl = isDesktopResourceRuntime() ? url : toApiResourceUrl(url);
@@ -194,10 +198,11 @@ export const PdfViewer = ({
   const [zoom, setZoom] = useState(1);
   const [failed, setFailed] = useState(false);
   const [internalFullscreen, setInternalFullscreen] = useState(false);
+  const fileNoteMode = mode === "file-note";
   const isFullscreen = fullscreen || internalFullscreen;
   const resolvedByteSize = useAttachmentByteSize(resolvedUrl, byteSize);
   const previewAllowed = canPreviewPdfInline(resolvedByteSize);
-  const expanded = previewAllowed && (isFullscreen || (controlledExpanded ?? uncontrolledExpanded));
+  const expanded = previewAllowed && (fileNoteMode || isFullscreen || (controlledExpanded ?? uncontrolledExpanded));
   const metadata = formatAttachmentMetadata("application/pdf", filename || label, resolvedByteSize);
 
   useEffect(() => {
@@ -261,7 +266,10 @@ export const PdfViewer = ({
       aria-label={isFullscreen ? t("pdfViewer.fullscreenLabel", { filename: label }) : undefined}
     >
       <span className={cn("flex min-w-0 flex-col", isFullscreen && "mx-auto h-full w-full max-w-6xl overflow-hidden rounded-xl bg-card shadow-2xl")}>
-        <span data-edgeever-resource-toolbar className="flex min-h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-card px-3">
+        <span data-edgeever-resource-toolbar className={cn(
+          "flex min-h-12 shrink-0 items-center overflow-x-auto border-b border-slate-200 bg-card",
+          fileNoteMode ? "gap-1 px-3 py-2 sm:min-h-9 sm:px-4 sm:py-0.5" : "gap-2 px-3",
+        )}>
           {isFullscreen && onPrevious ? (
             <ButtonTooltip title={t("pdfViewer.previous")}>
               <button type="button" className="pdf-viewer-action" aria-label={t("pdfViewer.previous")} onClick={onPrevious}>
@@ -276,7 +284,9 @@ export const PdfViewer = ({
               </button>
             </ButtonTooltip>
           ) : null}
-          <button
+          {!isFullscreen ? toolbarLeading : null}
+          {fileNoteMode && !isFullscreen && toolbarLeading && expanded && !failed ? <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-slate-200" /> : null}
+          {!fileNoteMode ? <button
             type="button"
             className="edgeever-attachment-link flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left disabled:cursor-default"
             aria-expanded={expanded}
@@ -290,7 +300,7 @@ export const PdfViewer = ({
                 {previewAllowed ? metadata : `${metadata} · ${t("pdfViewer.previewTooLarge")}`}
               </span>
             </span>
-          </button>
+          </button> : null}
           {expanded && !failed ? (
             <>
               <ButtonTooltip title={t("pdfViewer.zoomOut")}>
@@ -310,9 +320,9 @@ export const PdfViewer = ({
               </ButtonTooltip>
             </>
           ) : null}
-          <ButtonTooltip title={t("pdfViewer.download")}>
+          {!fileNoteMode ? <ButtonTooltip title={t("pdfViewer.download")}>
             <a className="pdf-viewer-action" href={toDesktopResourceDownloadUrl(resolvedUrl, filename || label)} download={filename || label} aria-label={t("pdfViewer.download")}><Download aria-hidden="true" /></a>
-          </ButtonTooltip>
+          </ButtonTooltip> : null}
           <ButtonTooltip title={t(isDesktopResourceRuntime() ? "attachmentOpen.copyHint" : "pdfViewer.openExternal")}>
             <AttachmentExternalLink className="pdf-viewer-action" href={resolvedUrl} filename={filename || label} iconOnly aria-label={t("pdfViewer.openExternal")}><ExternalLink aria-hidden="true" /></AttachmentExternalLink>
           </ButtonTooltip>
@@ -329,7 +339,7 @@ export const PdfViewer = ({
               </button>
             </ButtonTooltip>
           ) : null}
-          {!isFullscreen ? (
+          {!fileNoteMode && !isFullscreen ? (
             <ButtonTooltip title={expanded ? t("pdfViewer.collapse") : t("pdfViewer.expand")}>
               <button type="button" className="pdf-viewer-action" aria-label={expanded ? t("pdfViewer.collapse") : t("pdfViewer.expand")} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
                 {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
@@ -340,6 +350,10 @@ export const PdfViewer = ({
         {failed ? (
           <span className="flex min-h-24 items-center justify-center px-4 text-center text-sm text-slate-500">
             {t("pdfViewer.unavailable")}
+          </span>
+        ) : fileNoteMode && !previewAllowed ? (
+          <span className="flex min-h-24 items-center justify-center px-4 text-center text-sm text-slate-500">
+            {t("pdfViewer.previewTooLarge")}
           </span>
         ) : expanded ? (
           <span className={cn("block overflow-auto bg-slate-100", isFullscreen ? "min-h-0 flex-1" : "h-[min(72vh,52rem)]")}>
