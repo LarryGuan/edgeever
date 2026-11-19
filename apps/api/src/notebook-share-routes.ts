@@ -36,6 +36,7 @@ import { encryptSharePassword, readSharePassword } from "./share-password-encryp
 import { generateSharePassword } from "./share-password";
 import { publicTreeSql, getNotebookSite, resolveNotebookSiteToken } from "./notebook-site-service";
 import { toFtsQuery, escapeLike } from "./memo-list-service";
+import { mapPublicFileDocument, publicFileDocumentIdentity, type PublicFileResourceRow } from "./public-file-document";
 
 type ShareRow = {
   id: string;
@@ -460,6 +461,18 @@ export const registerPublicNotebookShareRoutes = (app: Hono<AppEnv>) => {
       >();
     if (!row) return notFound(c, "Shared note not found");
     const contentJson = JSON.parse(row.content_json) as TiptapDoc;
+    const fileIdentity = publicFileDocumentIdentity(row.content_markdown);
+    const fileResource = fileIdentity
+      ? await c.env.storage.db.prepare(
+        `${publicTreeSql}
+         SELECT r.id, r.filename, r.mime_type, r.byte_size
+         FROM resources r
+         INNER JOIN visible_memos m ON m.id = r.memo_id
+         WHERE m.id = ? AND r.id = ? AND r.role = 'primary'
+           AND m.is_deleted = 0 AND r.is_deleted = 0
+         LIMIT 1`,
+      ).bind(token, c.req.param("memoId"), fileIdentity.resourceId).first<PublicFileResourceRow>()
+      : null;
     const memoUrls: Record<string, string> = {};
     const ids = collectMemoLinkIds(
       resolveMemoContentDoc(contentJson, row.content_markdown),
@@ -494,6 +507,13 @@ export const registerPublicNotebookShareRoutes = (app: Hono<AppEnv>) => {
             ? null
             : sanitizeNoteProseCss(account.customCss),
       }),
+      fileDocument: fileIdentity && fileResource
+        ? mapPublicFileDocument(
+          fileIdentity.formatKey,
+          `/api/public/notebook-shares/${encodeURIComponent(token)}/resources`,
+          fileResource,
+        )
+        : null,
     };
     return c.json({ share, memoUrls });
   });

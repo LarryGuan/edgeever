@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { EdgeEverCodeBlock, codeBlockLowlight } from "@/lib/code-block";
 import { withEnvironmentTitlePrefix } from "@/lib/environment-title";
 import { resolvePublicShareBody } from "@/lib/public-share-body";
+import { PublicFileDocumentPreview } from "@/components/file-document/PublicFileDocumentPreview";
 import { sanitizeAndScopeCss } from "@/lib/css-sandbox";
 import {
   parseImageWidth,
@@ -178,6 +179,9 @@ const SharedDocument = ({
 }) => {
   const { resolvedTheme } = useAppearanceTheme();
   const body = useMemo(() => resolvePublicShareBody(share, token, access), [share, token, access]);
+  if (body.type === "file") {
+    return <PublicFileDocumentPreview document={body.document} updatedAt={share.updatedAt} />;
+  }
   if (body.type === "infographic") {
     return (
       <Suspense fallback={<div className="flex min-h-[360px] items-center justify-center text-slate-400"><LoaderCircle className="h-6 w-6 animate-spin" /></div>}>
@@ -362,6 +366,7 @@ export const PublicShareArticle = ({
   }, [publishedBodyFont]);
 
   const prose = resolveNoteProse(share.prose);
+  const fileDocument = Boolean(share.fileDocument);
   return (
     <div
       ref={containerRef}
@@ -374,7 +379,8 @@ export const PublicShareArticle = ({
     >
       <article
         className={cn(
-          "mx-auto max-w-4xl overflow-hidden",
+          "mx-auto overflow-hidden",
+          fileDocument ? "max-w-6xl" : "max-w-4xl",
           layout === "standalone" &&
             "rounded-2xl border border-slate-200 bg-card shadow-sm",
         )}
@@ -435,7 +441,9 @@ export const PublicShareArticle = ({
         <div
           className={cn(
             "edgeever-editor",
-            layout === "site" ? "py-4 sm:py-5" : "px-1 py-4 sm:px-4 sm:py-7",
+            fileDocument
+              ? "p-0"
+              : layout === "site" ? "py-4 sm:py-5" : "px-1 py-4 sm:px-4 sm:py-7",
           )}
           data-editor-theme="default"
           data-note-palette={prose.palette}

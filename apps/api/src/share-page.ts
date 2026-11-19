@@ -1,6 +1,7 @@
 import { getMemoDisplayTitle } from "@edgeever/shared/memo-title";
 import { isValidMemoShareSlug } from "@edgeever/shared/share-slug";
 import { PUBLIC_PAGE_HEADERS, PUBLIC_PAGE_ROBOTS } from "@edgeever/shared/public-page-headers";
+import { fileDocumentResourceId, parseFileDocument, stripFileDocumentMarker } from "@edgeever/shared/file-document";
 import { isMemoShareExpired, recordMemoShareView } from "./memo-share-access";
 import type { DatabaseAdapter } from "./storage-contract";
 
@@ -85,8 +86,17 @@ export const PUBLIC_SHARE_MARKDOWN_NOT_FOUND = "Shared note not found\n";
 export const PUBLIC_SHARE_MARKDOWN_PASSWORD = "This shared note requires a password.\n";
 export const PUBLIC_SHARE_MARKDOWN_EXPIRED = "This shared link has expired.\n";
 
+const publicShareBody = (markdown: string | null | undefined, publicResourceUrl?: string | null) => {
+  const source = parseFileDocument(markdown);
+  const body = stripFileDocumentMarker(markdown);
+  return source && publicResourceUrl
+    ? body.split(source.resourceUrl).join(publicResourceUrl)
+    : body;
+};
+
 /** Markdown body for a public note. A title already used as the first heading is kept once. */
-export const publicShareMarkdown = (title: string | null, body: string) => {
+export const publicShareMarkdown = (title: string | null, body: string, publicResourceUrl?: string | null) => {
+  body = publicShareBody(body, publicResourceUrl);
   // The stored zh-CN default title means "untitled"; it is not a heading.
   const heading = getMemoDisplayTitle(title, "").replace(/[\r\n]+/g, " ").trim();
   if (!heading) return body;
@@ -146,7 +156,11 @@ export const renderPublicMemoSharePage = async (
   const expired = Boolean(row) && isMemoShareExpired(row?.expires_at);
   const locked = !expired && Boolean(row?.password_hash);
   const readable = Boolean(row) && !expired && !locked;
-  const body = row?.content_markdown ?? "";
+  const fileResourceId = fileDocumentResourceId(parseFileDocument(row?.content_markdown));
+  const publicResourceUrl = token && fileResourceId
+    ? `${url.origin}/api/public/shares/${encodeURIComponent(token)}/resources/${encodeURIComponent(fileResourceId)}/blob`
+    : null;
+  const body = publicShareBody(row?.content_markdown, publicResourceUrl);
   const markdownUrl = `${url.origin}/share/${encodeURIComponent(target.segment)}.md`;
   const canonical = `${url.origin}/share/${encodeURIComponent(target.segment)}`;
 
@@ -164,7 +178,7 @@ export const renderPublicMemoSharePage = async (
     // The HTML shell below is not counted: a browser opening it counts once through the share API.
     if (request.method === "GET" && token) await recordMemoShareView(db, token);
     headers.set("Content-Disposition", "inline");
-    return new Response(request.method === "HEAD" ? null : publicShareMarkdown(row.title, body), { status: 200, headers });
+    return new Response(request.method === "HEAD" ? null : publicShareMarkdown(row.title, body, publicResourceUrl), { status: 200, headers });
   }
 
   const noteTitle = readable ? getMemoDisplayTitle(row?.title, "").replace(/[\r\n]+/g, " ").trim() : "";

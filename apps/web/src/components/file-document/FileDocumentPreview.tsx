@@ -6,21 +6,23 @@ import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
 
 import { AudioAttachmentPlayer } from "@/components/attachments/AudioAttachmentPlayer";
-import { DocxAttachmentPreview } from "@/components/attachments/DocxAttachmentPreview";
 import { VideoAttachmentPlayer } from "@/components/attachments/VideoAttachmentPlayer";
 import { HtmlFilePreview } from "@/components/file-document/HtmlFilePreview";
+import { DocxFileDocumentPreview } from "@/components/file-document/DocxFileDocumentPreview";
 import { MemoEditorToolbarRow } from "@/components/MemoEditorToolbarChrome";
 import { PdfViewer } from "@/components/pdf/PdfViewer";
 import { isDesktopResourceRuntime, toApiResourceUrl } from "@/lib/desktop-resources";
 import { resolveFileDocumentPreviewer } from "@/lib/file-document-presentation";
 import type { Resource } from "@edgeever/shared";
 
+export type FileDocumentPreviewResource = Pick<Resource, "id" | "filename" | "mimeType" | "byteSize" | "url" | "sha256" | "updatedAt">;
+
 export const FileDocumentPreview = ({
   resource,
   readResource,
   toolbar,
 }: {
-  resource: Resource;
+  resource: FileDocumentPreviewResource;
   readResource: (resourceId: string) => Promise<Blob>;
   toolbar: ReactNode;
 }) => {
@@ -109,16 +111,7 @@ export const FileDocumentPreview = ({
   }
 
   if (previewer.kind === "docx") {
-    return (
-      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-100 [&>iframe]:!h-full [&>iframe]:min-h-0 [&>iframe]:flex-1">
-        <MemoEditorToolbarRow className="shrink-0 border-b border-slate-200 bg-card" role="toolbar" aria-label={t("fileNote.toolbar")}>
-          {toolbar}
-        </MemoEditorToolbarRow>
-        <div className="min-h-0 flex-1 [&>iframe]:!h-full">
-          <DocxAttachmentPreview url={url} filename={filename} />
-        </div>
-      </div>
-    );
+    return <DocxFileDocumentPreview url={url} filename={filename} toolbar={toolbar} />;
   }
 
   if (previewer.kind === "html") {

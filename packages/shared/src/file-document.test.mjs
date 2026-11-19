@@ -5,6 +5,7 @@ import {
   parseFileDocument,
   resolveDocumentDescriptor,
   serializeFileDocumentMarker,
+  stripFileDocumentMarker,
 } from "./index.ts";
 
 describe("file document contract", () => {
@@ -20,6 +21,7 @@ describe("file document contract", () => {
       resourceUrl: "/api/v1/resources/res_d2/blob",
     });
     expect(fileDocumentResourceId(parseFileDocument(markdown))).toBe("res_d2");
+    expect(stripFileDocumentMarker(markdown)).toBe("[附件：system.d2](/api/v1/resources/res_d2/blob)");
     expect(resolveDocumentDescriptor(markdown)).toEqual({
       storageMode: "resource",
       formatKey: "d2",

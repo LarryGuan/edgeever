@@ -19,6 +19,7 @@ import { allowPasswordProtectedShare, setShareAccessCookie, shareAccessCookiePat
 import { encryptSharePassword, readSharePassword } from "./share-password-encryption";
 import { resolveMemoShareToken } from "./share-page";
 import { generateSharePassword } from "./share-password";
+import { mapPublicFileDocument, publicFileDocumentIdentity, type PublicFileResourceRow } from "./public-file-document";
 
 const SHARE_TOKEN_BYTES = 32;
 
@@ -202,6 +203,18 @@ export const registerPublicShareRoutes = (app: Hono<AppEnv>) => {
     }
 
     const contentJson = JSON.parse(row.content_json) as TiptapDoc;
+    const fileIdentity = publicFileDocumentIdentity(row.content_markdown);
+    const fileResource = fileIdentity
+      ? await c.env.storage.db.prepare(
+        `SELECT r.id, r.filename, r.mime_type, r.byte_size
+         FROM memo_shares ms
+         INNER JOIN memos m ON m.id = ms.memo_id AND m.workspace_id = ms.workspace_id
+         INNER JOIN resources r ON r.memo_id = m.id
+         WHERE ms.token = ? AND r.id = ? AND r.role = 'primary'
+           AND m.is_deleted = 0 AND r.is_deleted = 0
+         LIMIT 1`,
+      ).bind(token, fileIdentity.resourceId).first<PublicFileResourceRow>()
+      : null;
     const referencedMemoIds = collectMemoLinkIds(resolveMemoContentDoc(contentJson, row.content_markdown));
     const memoShareTokens: Record<string, string> = {};
     for (let offset = 0; offset < referencedMemoIds.length; offset += 80) {
@@ -230,6 +243,13 @@ export const registerPublicShareRoutes = (app: Hono<AppEnv>) => {
       prose: publicNoteProseFromAccount(presentAccountNoteProse(row)),
       showUpdatedAt: row.show_updated_at !== 0,
       showBranding: row.show_branding !== 0,
+      fileDocument: fileIdentity && fileResource
+        ? mapPublicFileDocument(
+          fileIdentity.formatKey,
+          `/api/public/shares/${encodeURIComponent(token)}/resources`,
+          fileResource,
+        )
+        : null,
     };
     // Hono answers HEAD through this GET handler; a probe is not a view.
     if (c.req.method === "GET") await recordMemoShareView(c.env.storage.db, token);

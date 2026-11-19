@@ -7,6 +7,7 @@ export class DocxPreviewTooLargeError extends Error {}
 export const isPreviewableDocx = (filename: string, url: string) =>
   /\.docx$/i.test(filename.trim())
   && (url.startsWith("/api/v1/resources/")
+    || /^\/api\/public\/(?:shares|notebook-shares)\/[^/]+\/resources\/[^/]+\/blob(?:$|[?#])/.test(url)
     || url.startsWith("edgeever-resource://")
     || url.startsWith("edgeever-staged://"));
 
@@ -41,7 +42,10 @@ export const loadDocxPreviewBytes = async (
     return new Uint8Array(resource.bytes);
   }
 
-  if (!url.startsWith("/api/v1/resources/")) throw new Error("Unsupported DOCX resource URL");
+  if (!url.startsWith("/api/v1/resources/")
+    && !/^\/api\/public\/(?:shares|notebook-shares)\/[^/]+\/resources\/[^/]+\/blob(?:$|[?#])/.test(url)) {
+    throw new Error("Unsupported DOCX resource URL");
+  }
   const response = await fetch(url, { credentials: "same-origin", cache: "no-store", signal });
   if (!response.ok) throw new Error(`DOCX resource request failed: ${response.status}`);
   const declaredSize = normalizeAttachmentByteSize(response.headers.get("Content-Length"));

@@ -21,6 +21,15 @@ const shareOf = (contentMarkdown, contentJson = markdownToDoc(contentMarkdown)) 
 });
 
 describe("public share body", () => {
+  test("renders a public file note through its dedicated preview path", () => {
+    const fileDocument = {
+      formatKey: "pdf",
+      resource: { id: "res_pdf", filename: "report.pdf", mimeType: "application/pdf", byteSize: 42, url: "/public/report" },
+    };
+    expect(resolvePublicShareBody({ ...shareOf("fallback"), fileDocument }, "share-token"))
+      .toEqual({ type: "file", document: fileDocument });
+  });
+
   test("renders infographic notes from native syntax instead of exposing their metadata", () => {
     const document = { schemaVersion: 1, syntax: "infographic list-row-simple-horizontal\ndata\n  title Shared graphic\n  items\n    - label First" };
     const body = resolvePublicShareBody(shareOf(serializeInfographicDocument(document)), "share-token");

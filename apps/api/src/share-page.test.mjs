@@ -152,6 +152,22 @@ describe("public memo share pages", () => {
     expect(await browser.text()).toContain("edgeever-shared-note");
   });
 
+  test("keeps the internal file-document marker out of public HTML and markdown", async () => {
+    const sqlite = createDatabase();
+    const marker = "<!-- edgeever-file-v1:pdf /api/v1/resources/res_pdf/blob -->";
+    sqlite.query("UPDATE memo_contents SET content_markdown = ? WHERE memo_id = 'memo_source'")
+      .run(`${marker}\n\n[report.pdf](/api/v1/resources/res_pdf/blob)\n`);
+
+    const html = await (await render(sqlite, `/share/${token}`)).text();
+    expect(html).not.toContain("edgeever-file-v1");
+    expect(html).toContain("report.pdf");
+
+    const markdown = await (await render(sqlite, `/share/${token}.md`)).text();
+    expect(markdown).not.toContain("edgeever-file-v1");
+    expect(markdown).not.toContain("/api/v1/resources/res_pdf/blob");
+    expect(markdown).toContain(`[report.pdf](https://note.example/api/public/shares/${token}/resources/res_pdf/blob)`);
+  });
+
   test("omits the body when the share is missing, deleted, or password protected", async () => {
     const sqlite = createDatabase();
     const missing = await render(sqlite, `/share/${"m".repeat(43)}`);

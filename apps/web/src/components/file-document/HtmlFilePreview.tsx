@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { decodeHtmlFilePreview, sanitizeHtmlFilePreview } from "@/lib/html-file-preview";
-import type { Resource } from "@edgeever/shared";
+import type { FileDocumentPreviewResource } from "./FileDocumentPreview";
 
 type PreviewState =
   | { status: "loading" }
@@ -14,7 +14,7 @@ export const HtmlFilePreview = ({
   resource,
   readResource,
 }: {
-  resource: Resource;
+  resource: FileDocumentPreviewResource;
   readResource: (resourceId: string) => Promise<Blob>;
 }) => {
   const { t } = useTranslation();

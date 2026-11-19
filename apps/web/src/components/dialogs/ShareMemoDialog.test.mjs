@@ -22,6 +22,8 @@ describe("ShareMemoDialog raw markdown link support", () => {
   });
 
   test("renders compact raw markdown strip with copy button and i18n labels", () => {
+    expect(source).toContain('memo.document?.storageMode !== "resource"');
+    expect(source).toContain("showMarkdownActions ? <div");
     expect(source).toContain('t("sharing.markdownRawLabel")');
     expect(source).toContain('"sharing.copyMarkdownLink"');
     expect(source).toContain('disabled={Boolean(share.passwordProtected)}');
@@ -31,7 +33,7 @@ describe("ShareMemoDialog raw markdown link support", () => {
   test("renders open markdown button in actions footer when not password protected", () => {
     expect(source).toContain('t("sharing.openMarkdown")');
     expect(source).toContain('window.open(markdownUrl, "_blank", "noopener,noreferrer")');
-    expect(source).toContain('!share.passwordProtected');
+    expect(source).toContain('!share.passwordProtected && showMarkdownActions');
   });
 
   test("switches compact hint text when password protection is active", () => {

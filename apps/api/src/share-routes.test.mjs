@@ -92,6 +92,35 @@ const createDatabaseEnvironment = ({ presentationMigration = true } = {}) => {
 };
 
 describe("public memo shares", () => {
+  test("publishes only the shared memo's primary file through the public resource route", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    const marker = "<!-- edgeever-file-v1:pdf /api/v1/resources/res_report/blob -->\n\n[附件：report.pdf](/api/v1/resources/res_report/blob)";
+    sqlite.query("UPDATE memo_contents SET content_markdown = ? WHERE memo_id = 'memo_source'").run(marker);
+    sqlite.query(`INSERT INTO resources (id, memo_id, object_key, kind, role, format_key, mime_type, filename, byte_size)
+      VALUES ('res_report', 'memo_source', 'report-key', 'attachment', 'primary', 'pdf', 'application/pdf', 'report.pdf', 42)`).run();
+    const app = new Hono();
+    registerPublicShareRoutes(app);
+
+    const response = await app.request(`/api/public/shares/${sourceToken}`, {}, environment);
+    expect(response.status).toBe(200);
+    expect((await response.json()).share.fileDocument).toEqual({
+      formatKey: "pdf",
+      resource: {
+        id: "res_report",
+        filename: "report.pdf",
+        mimeType: "application/pdf",
+        byteSize: 42,
+        url: `/api/public/shares/${sourceToken}/resources/res_report/blob`,
+      },
+    });
+
+    sqlite.query("UPDATE memo_contents SET content_markdown = replace(content_markdown, 'res_report', 'res_foreign') WHERE memo_id = 'memo_source'").run();
+    sqlite.query(`INSERT INTO resources (id, memo_id, object_key, kind, role, mime_type, filename, byte_size)
+      VALUES ('res_foreign', 'memo_target', 'foreign-key', 'attachment', 'primary', 'application/pdf', 'foreign.pdf', 7)`).run();
+    expect((await (await app.request(`/api/public/shares/${sourceToken}`, {}, environment)).json()).share.fileDocument).toBeNull();
+    sqlite.close();
+  });
+
   test("returns share tokens only for referenced notes that are also public", async () => {
     const { sqlite, environment } = createDatabaseEnvironment();
     const app = new Hono();

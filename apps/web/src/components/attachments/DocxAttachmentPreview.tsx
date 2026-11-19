@@ -9,7 +9,17 @@ type PreviewState =
   | { status: "ready"; html: string }
   | { status: "too-large" | "failed" };
 
-export const DocxAttachmentPreview = ({ url, filename }: { url: string; filename: string }) => {
+export const DocxAttachmentPreview = ({
+  url,
+  filename,
+  zoom = 1,
+  fill = false,
+}: {
+  url: string;
+  filename: string;
+  zoom?: number;
+  fill?: boolean;
+}) => {
   const { t } = useTranslation();
   const [state, setState] = useState<PreviewState>({ status: "loading" });
 
@@ -51,12 +61,20 @@ export const DocxAttachmentPreview = ({ url, filename }: { url: string; filename
 
   if (state.status === "ready") {
     return (
-      <iframe
-        aria-label={t("wordViewer.previewLabel", { filename })}
-        sandbox=""
-        srcDoc={state.html}
-        className="block h-[min(72vh,52rem)] w-full border-0 bg-slate-100"
-      />
+      <span className={fill ? "block h-full min-h-0 w-full overflow-hidden" : "block h-[min(72vh,52rem)] w-full overflow-hidden"}>
+        <iframe
+          aria-label={t("wordViewer.previewLabel", { filename })}
+          sandbox=""
+          srcDoc={state.html}
+          className="block border-0 bg-slate-100"
+          style={{
+            width: `${100 / zoom}%`,
+            height: `${100 / zoom}%`,
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
+          }}
+        />
+      </span>
     );
   }
 

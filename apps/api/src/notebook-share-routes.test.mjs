@@ -570,6 +570,26 @@ describe("live recursive notebook sharing", () => {
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(await response.text()).toBe("2345");
   });
+
+  test("publishes a visible primary file as a notebook-site file document", async () => {
+    const { db, request } = fixture();
+    db.run("UPDATE resources SET role = 'primary', format_key = 'word', mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', filename = 'report.docx' WHERE id = 'res_memo_child'");
+    db.run("UPDATE memo_contents SET content_markdown = ? WHERE memo_id = 'memo_child'", [
+      "<!-- edgeever-file-v1:word /api/v1/resources/res_memo_child/blob -->\n\n[附件：report.docx](/api/v1/resources/res_memo_child/blob)",
+    ]);
+    const response = await request("/memos/memo_child");
+    expect(response.status).toBe(200);
+    expect((await response.json()).share.fileDocument).toEqual({
+      formatKey: "word",
+      resource: {
+        id: "res_memo_child",
+        filename: "report.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        byteSize: 10,
+        url: `/api/public/notebook-shares/${token}/resources/res_memo_child/blob`,
+      },
+    });
+  });
   test("independent child notebook shares survive parent revocation", async () => {
     const { app, environment, request } = fixture();
     const created = await (

@@ -14,18 +14,21 @@ import {
   tableFallbackMarkdown,
   type DiagramDocument,
   type InfographicDocument,
+  type PublicFileDocument,
   type PublicMemoShare,
   type TiptapDoc,
   type ShareBodyAccess,
 } from "@edgeever/shared";
 
 export type PublicShareBody =
+  | { type: "file"; document: PublicFileDocument }
   | { type: "diagram"; diagram: DiagramDocument }
   | { type: "infographic"; infographic: InfographicDocument }
   | { type: "rich-text"; content: TiptapDoc };
 
 /** Visual diagram notes share through IR → X6. Ordinary notes, including embedded Mermaid fences, stay on TipTap. */
 export const resolvePublicShareBody = (share: PublicMemoShare, token: string, access?: ShareBodyAccess): PublicShareBody => {
+  if (share.fileDocument) return { type: "file", document: share.fileDocument };
   const diagram = parseDiagramDocument(share.contentMarkdown);
   if (diagram) return { type: "diagram", diagram };
   const infographic = parseInfographicDocument(share.contentMarkdown);

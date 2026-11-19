@@ -5,6 +5,7 @@ const source = readFileSync(new URL("./FileDocumentPane.tsx", import.meta.url), 
 const previewSource = readFileSync(new URL("./file-document/FileDocumentPreview.tsx", import.meta.url), "utf8");
 const pdfSource = readFileSync(new URL("./pdf/PdfViewer.tsx", import.meta.url), "utf8");
 const infoSource = readFileSync(new URL("./file-document/FileDocumentInfoDialog.tsx", import.meta.url), "utf8");
+const docxSource = readFileSync(new URL("./file-document/DocxFileDocumentPreview.tsx", import.meta.url), "utf8");
 
 describe("file document shell", () => {
   test("exposes one editable note title and keeps source-file facts read-only", () => {
@@ -35,5 +36,16 @@ describe("file document shell", () => {
     expect(pdfSource).toContain('mode = "attachment"');
     expect(pdfSource).toContain("!fileNoteMode ? <button");
     expect(pdfSource).toContain("!fileNoteMode ? <ButtonTooltip");
+    expect(pdfSource).toContain('addEventListener("touchmove"');
+    expect(pdfSource).toContain("Math.round(zoom * 100)");
+  });
+
+  test("adds DOCX zoom and fullscreen without weakening its iframe sandbox", () => {
+    expect(previewSource).toContain("<DocxFileDocumentPreview");
+    expect(docxSource).toContain("<DocxAttachmentPreview");
+    expect(docxSource).toContain("Math.round(zoom * 100)");
+    expect(docxSource).toContain("createPortal(viewer, document.body)");
+    expect(readFileSync(new URL("./attachments/DocxAttachmentPreview.tsx", import.meta.url), "utf8"))
+      .toContain('sandbox=""');
   });
 });

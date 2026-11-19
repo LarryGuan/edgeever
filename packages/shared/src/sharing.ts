@@ -79,6 +79,17 @@ export const parsePublishedNoteBodyFont = (
     ? (value as PublishedNoteBodyFont)
     : null;
 
+export type PublicFileDocument = {
+  formatKey: string;
+  resource: {
+    id: string;
+    filename: string | null;
+    mimeType: string | null;
+    byteSize: number;
+    url: string;
+  };
+};
+
 export type PublicMemoShare = {
   title: string | null;
   contentJson: TiptapDoc;
@@ -93,6 +104,8 @@ export type PublicMemoShare = {
   /** Older servers and notebook shares may omit these; omission means visible. */
   showUpdatedAt?: boolean;
   showBranding?: boolean;
+  /** Present when the shared memo is backed by one primary file resource. */
+  fileDocument?: PublicFileDocument | null;
 };
 
 const RESOURCE_URL_PATTERN =

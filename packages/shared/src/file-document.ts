@@ -31,6 +31,9 @@ export const parseFileDocument = (markdown: string | null | undefined): FileDocu
   return match ? { formatKey: match[1].toLowerCase(), resourceUrl: match[2] } : null;
 };
 
+export const stripFileDocumentMarker = (markdown: string | null | undefined) =>
+  (markdown ?? "").replace(FILE_DOCUMENT_MARKER, "").replace(/^\s+/, "");
+
 export const hasFileDocumentMarker = (markdown: string | null | undefined) => Boolean(parseFileDocument(markdown));
 
 export const fileDocumentResourceId = (source: FileDocumentSource | null | undefined): string | null => {

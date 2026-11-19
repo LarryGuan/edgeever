@@ -50,6 +50,13 @@ export const ShareMemoDialog = ({
     gcTime: 0,
     refetchOnMount: "always",
   });
+  const memoQuery = useQuery({
+    queryKey: ["memo", memoId, "share-kind"],
+    queryFn: () => api.getMemo(memoId),
+    enabled: open,
+    retry: false,
+    staleTime: 30_000,
+  });
   const createMutation = useMutation({
     mutationFn: () => api.createMemoShare(memoId),
     onSuccess: (data) => {
@@ -128,6 +135,7 @@ export const ShareMemoDialog = ({
 
   const shareUrl = share ? getPublicShareUrl(memoSharePathSegment(share)) : "";
   const markdownUrl = shareUrl ? `${shareUrl}.md` : "";
+  const showMarkdownActions = memoQuery.isSuccess && memoQuery.data.memo.document?.storageMode !== "resource";
   const isWorking = shareQuery.isLoading || createMutation.isPending || passwordMutation.isPending || presentationMutation.isPending || slugMutation.isPending || expiryMutation.isPending || revokeMutation.isPending;
   const slugTaken = slugMutation.error instanceof ApiRequestError && slugMutation.error.code === "share_slug_taken";
   const expiryInvalid = expiryMutation.error instanceof ApiRequestError && expiryMutation.error.code === "share_expiry_invalid";
@@ -204,7 +212,7 @@ export const ShareMemoDialog = ({
               </Button>
             </div>
 
-            <div className="flex items-center justify-between gap-2 px-0.5 text-xs">
+            {showMarkdownActions ? <div className="flex items-center justify-between gap-2 px-0.5 text-xs">
               <span className="flex min-w-0 items-center gap-1.5 text-slate-700 dark:text-slate-300">
                 <FileCode2 className="h-4 w-4 shrink-0 text-slate-500" />
                 <span className="font-medium">{t("sharing.markdownRawLabel")}</span>
@@ -231,7 +239,7 @@ export const ShareMemoDialog = ({
                       : "sharing.copyMarkdownLink",
                 )}
               </Button>
-            </div>
+            </div> : null}
 
             <ShareSlugControls
               slug={share.slug ?? null}
@@ -309,7 +317,7 @@ export const ShareMemoDialog = ({
                 {t("sharing.revoke")}
               </Button>
               <div className="ml-auto flex items-center gap-2">
-                {!share.passwordProtected ? (
+                {!share.passwordProtected && showMarkdownActions ? (
                   <Button
                     type="button"
                     variant="outline"

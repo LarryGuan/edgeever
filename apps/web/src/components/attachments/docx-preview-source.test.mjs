@@ -12,6 +12,8 @@ afterEach(() => { globalThis.fetch = originalFetch; });
 describe("DOCX preview source", () => {
   test("only offers inline preview for note-owned DOCX resources", () => {
     expect(isPreviewableDocx("Report.DOCX", "/api/v1/resources/res_1/blob")).toBe(true);
+    expect(isPreviewableDocx("Report.DOCX", "/api/public/shares/token/resources/res_1/blob")).toBe(true);
+    expect(isPreviewableDocx("Report.DOCX", "/api/public/notebook-shares/token/resources/res_1/blob")).toBe(true);
     expect(isPreviewableDocx("draft.docx", "edgeever-staged://stage_1")).toBe(true);
     expect(isPreviewableDocx("old.doc", "/api/v1/resources/res_1/blob")).toBe(false);
     expect(isPreviewableDocx("report.docx", "https://other.example/report.docx")).toBe(false);
@@ -57,6 +59,8 @@ describe("DOCX preview source", () => {
       return new Response(new Uint8Array([4, 5, 6]));
     };
     await expect(loadDocxPreviewBytes("/api/v1/resources/res_1/blob", undefined, undefined))
+      .resolves.toEqual(new Uint8Array([4, 5, 6]));
+    await expect(loadDocxPreviewBytes("/api/public/shares/token/resources/res_1/blob", undefined, undefined))
       .resolves.toEqual(new Uint8Array([4, 5, 6]));
   });
 });

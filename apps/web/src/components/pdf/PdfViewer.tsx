@@ -36,9 +36,10 @@ type PdfPageProps = {
   pageNumber: number;
   fitWidth: boolean;
   zoom: number;
+  zoomRelativeToFitWidth: boolean;
 };
 
-const PdfPage = ({ document, pageNumber, fitWidth, zoom }: PdfPageProps) => {
+const PdfPage = ({ document, pageNumber, fitWidth, zoom, zoomRelativeToFitWidth }: PdfPageProps) => {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [visible, setVisible] = useState(false);
@@ -79,7 +80,8 @@ const PdfPage = ({ document, pageNumber, fitWidth, zoom }: PdfPageProps) => {
     const canvas = canvasRef.current;
     if (!visible || !page || !canvas || hostWidth <= 0) return;
     const baseViewport = page.getViewport({ scale: 1 });
-    const cssScale = fitWidth ? Math.max(0.1, (hostWidth - 16) / baseViewport.width) : zoom;
+    const fitScale = Math.max(0.1, (hostWidth - 16) / baseViewport.width);
+    const cssScale = fitWidth ? fitScale * (zoomRelativeToFitWidth ? zoom : 1) : zoom;
     const outputScale = Math.min(window.devicePixelRatio || 1, 2);
     const viewport = page.getViewport({ scale: cssScale * outputScale });
     const context = canvas.getContext("2d", { alpha: false });
@@ -91,7 +93,7 @@ const PdfPage = ({ document, pageNumber, fitWidth, zoom }: PdfPageProps) => {
     canvas.style.height = `${Math.floor(viewport.height / outputScale)}px`;
     const task = page.render({ canvas, canvasContext: context, viewport });
     return () => task.cancel();
-  }, [fitWidth, hostWidth, page, visible, zoom]);
+  }, [fitWidth, hostWidth, page, visible, zoom, zoomRelativeToFitWidth]);
 
   const placeholderHeight = 640;
 
@@ -107,10 +109,11 @@ type PdfDocumentProps = {
   active: boolean;
   fitWidth: boolean;
   zoom: number;
+  zoomRelativeToFitWidth: boolean;
   onError: () => void;
 };
 
-const PdfDocument = ({ url, active, fitWidth, zoom, onError }: PdfDocumentProps) => {
+const PdfDocument = ({ url, active, fitWidth, zoom, zoomRelativeToFitWidth, onError }: PdfDocumentProps) => {
   const { t } = useTranslation();
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
 
@@ -150,7 +153,7 @@ const PdfDocument = ({ url, active, fitWidth, zoom, onError }: PdfDocumentProps)
   return (
     <span className="flex flex-col items-center gap-3 p-3">
       {Array.from({ length: document.numPages }, (_, index) => (
-        <PdfPage key={index + 1} document={document} pageNumber={index + 1} fitWidth={fitWidth} zoom={zoom} />
+        <PdfPage key={index + 1} document={document} pageNumber={index + 1} fitWidth={fitWidth} zoom={zoom} zoomRelativeToFitWidth={zoomRelativeToFitWidth} />
       ))}
     </span>
   );
@@ -192,6 +195,8 @@ export const PdfViewer = ({
   const { t } = useTranslation();
   const resolvedUrl = isDesktopResourceRuntime() ? url : toApiResourceUrl(url);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const previewRef = useRef<HTMLSpanElement | null>(null);
+  const zoomRef = useRef(1);
   const [uncontrolledExpanded, setUncontrolledExpanded] = useState(defaultExpanded);
   const [nearViewport, setNearViewport] = useState(fullscreen);
   const [fitWidth, setFitWidth] = useState(true);
@@ -252,6 +257,49 @@ export const PdfViewer = ({
   };
   const active = expanded && nearViewport && !failed;
 
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    const preview = previewRef.current;
+    if (!fileNoteMode || !preview) return;
+    let startDistance = 0;
+    let startZoom = 1;
+    let frame = 0;
+    const distance = (touches: TouchList) => Math.hypot(
+      touches[0]!.clientX - touches[1]!.clientX,
+      touches[0]!.clientY - touches[1]!.clientY,
+    );
+    const start = (event: TouchEvent) => {
+      if (event.touches.length !== 2) return;
+      startDistance = distance(event.touches);
+      startZoom = zoomRef.current;
+      event.preventDefault();
+    };
+    const move = (event: TouchEvent) => {
+      if (event.touches.length !== 2 || startDistance <= 0) return;
+      event.preventDefault();
+      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, startZoom * distance(event.touches) / startDistance));
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setZoom(Math.round(next * 20) / 20));
+    };
+    const end = (event: TouchEvent) => {
+      if (event.touches.length < 2) startDistance = 0;
+    };
+    preview.addEventListener("touchstart", start, { passive: false });
+    preview.addEventListener("touchmove", move, { passive: false });
+    preview.addEventListener("touchend", end);
+    preview.addEventListener("touchcancel", end);
+    return () => {
+      cancelAnimationFrame(frame);
+      preview.removeEventListener("touchstart", start);
+      preview.removeEventListener("touchmove", move);
+      preview.removeEventListener("touchend", end);
+      preview.removeEventListener("touchcancel", end);
+    };
+  }, [fileNoteMode]);
+
   const viewer = (
     <span
       ref={rootRef}
@@ -304,17 +352,23 @@ export const PdfViewer = ({
           {expanded && !failed ? (
             <>
               <ButtonTooltip title={t("pdfViewer.zoomOut")}>
-                <button type="button" className="pdf-viewer-action" aria-label={t("pdfViewer.zoomOut")} disabled={fitWidth || zoom <= MIN_ZOOM} onClick={() => setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP))}>
+                <button type="button" className="pdf-viewer-action" aria-label={t("pdfViewer.zoomOut")} disabled={zoom <= MIN_ZOOM || (!fileNoteMode && fitWidth)} onClick={() => setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP))}>
                   <ZoomOut aria-hidden="true" />
                 </button>
               </ButtonTooltip>
+              {fileNoteMode ? <span className="min-w-12 text-center text-xs tabular-nums text-slate-500" aria-live="polite">{Math.round(zoom * 100)}%</span> : null}
               <ButtonTooltip title={t("pdfViewer.zoomIn")}>
-                <button type="button" className="pdf-viewer-action" aria-label={t("pdfViewer.zoomIn")} disabled={fitWidth || zoom >= MAX_ZOOM} onClick={() => setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP))}>
+                <button type="button" className="pdf-viewer-action" aria-label={t("pdfViewer.zoomIn")} disabled={zoom >= MAX_ZOOM || (!fileNoteMode && fitWidth)} onClick={() => setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP))}>
                   <ZoomIn aria-hidden="true" />
                 </button>
               </ButtonTooltip>
               <ButtonTooltip title={t("pdfViewer.fitWidth")}>
-                <button type="button" className={cn("pdf-viewer-action", fitWidth && "is-active")} aria-label={t("pdfViewer.fitWidth")} aria-pressed={fitWidth} onClick={() => setFitWidth((value) => !value)}>
+                <button type="button" className={cn("pdf-viewer-action", fitWidth && (!fileNoteMode || zoom === 1) && "is-active")} aria-label={t("pdfViewer.fitWidth")} aria-pressed={fitWidth && (!fileNoteMode || zoom === 1)} onClick={() => {
+                  if (fileNoteMode) {
+                    setFitWidth(true);
+                    setZoom(1);
+                  } else setFitWidth((value) => !value);
+                }}>
                   <RotateCcw aria-hidden="true" />
                 </button>
               </ButtonTooltip>
@@ -356,8 +410,8 @@ export const PdfViewer = ({
             {t("pdfViewer.previewTooLarge")}
           </span>
         ) : expanded ? (
-          <span className={cn("block overflow-auto bg-slate-100", isFullscreen ? "min-h-0 flex-1" : "h-[min(72vh,52rem)]")}>
-            <PdfDocument url={resolvedUrl} active={active} fitWidth={fitWidth} zoom={zoom} onError={handleError} />
+          <span ref={previewRef} className={cn("block overflow-auto bg-slate-100", isFullscreen ? "min-h-0 flex-1" : "h-[min(72vh,52rem)]")} style={fileNoteMode ? { touchAction: "pan-x pan-y" } : undefined}>
+            <PdfDocument url={resolvedUrl} active={active} fitWidth={fitWidth} zoom={zoom} zoomRelativeToFitWidth={fileNoteMode} onError={handleError} />
           </span>
         ) : null}
       </span>

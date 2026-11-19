@@ -17,6 +17,7 @@
     "./ai-prompt-seeds": "./src/ai-prompt-seeds.ts",
     "./deployment-metadata": "./src/deployment-metadata.ts",
     "./editor-link": "./src/editor-link.ts",
+    "./file-document": "./src/file-document.ts",
     "./image-display": "./src/image-display.ts",
     "./image-gallery-editing": "./src/image-gallery-editing.ts",
     "./native-image-gallery": "./src/native-image-gallery.ts",
