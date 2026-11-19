@@ -173,6 +173,17 @@ The second row is a left-aligned file-type toolbar:
 5. Remove the DOCX Beta marker while leaving image notes and embedded ordinary-note attachments unchanged.
 6. Run focused tests, Web and mobile type checks, and the Web build; do not push or deploy before verification.
 
+### Third-pass preview controls and file sharing
+
+The third pass lifts the first-pass boundary that excluded a full file-share page while retaining the existing share authorization and public-resource routes. It adds no database migration or external Office SDK.
+
+1. Treat fit-to-width as the 100% baseline for PDF file notes; zoom buttons work without first leaving fit mode and the toolbar shows the percentage. Pinch gestures adjust the PDF only inside its preview instead of globally disabling browser zoom.
+2. Add zoom out, percentage, zoom in, fit-to-width, and fullscreen to DOCX file notes while keeping the script-free sandbox. This pass does not intercept pinch gestures inside the DOCX iframe.
+3. Do not show a misleading DOCX external-open action on the Web and do not integrate Microsoft Office Online. Download remains the original-file handoff.
+4. Recognize file notes in both single-note shares and notebook sites, rendering PDF, DOCX, media, images, or safe HTML through the existing public-resource authorization. Public toolbars contain download and preview controls only, never private replacement actions.
+5. Hide raw Markdown, copy `.md`, and open `.md` actions for file notes while leaving ordinary notes unchanged. Public Markdown output strips the internal file marker and retains only the title and accessible file link.
+6. Verify passwords, expiry, resource ownership, range requests, revocation, ordinary-note shares, and ordinary embedded previews for regressions.
+
 ## Acceptance
 
 ### File shell
@@ -190,6 +201,13 @@ The second row is a left-aligned file-type toolbar:
 - Embedded attachment sizes in ordinary notes remain unchanged.
 - Scripts, forms, popups, top navigation, and external network access do not work in HTML preview; static content and inline styles remain readable.
 - Files over 5 MiB, non-UTF-8 content, parse failures, and unsupported types remain downloadable.
+
+### Third-pass acceptance
+
+- PDF file notes expose working zoom controls immediately; 100% means fit-to-width, and pinch gestures zoom only the PDF rather than the whole page.
+- DOCX file notes can zoom, restore fit, and enter or leave fullscreen while the sandbox still blocks scripts and parent-page access.
+- File notes render a read-only preview in both single-note shares and notebook sites while remaining subject to password, expiry, and resource-ownership checks.
+- File-note share settings hide Markdown actions; ordinary-note `.md` sharing remains unchanged.
 
 ### Upload and list
 
