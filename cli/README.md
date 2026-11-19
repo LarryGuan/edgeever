@@ -1,6 +1,6 @@
 # EdgeEver CLI for Knowledge Workbench
 
-## Current workflow: CLI 0.8.1
+## Current workflow: CLI 0.8.2
 
 Start with the [EdgeEver CLI and Skill User Guide](../docs/edgeever-cli-skill-guide.md) for first-time setup, multiple tokens, single-note operations, and agent-skill usage. This README retains the full command, upgrade, and implementation reference.
 
@@ -65,7 +65,7 @@ From this directory:
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.8.1.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.8.2.tgz
 edgeever --help
 ```
 

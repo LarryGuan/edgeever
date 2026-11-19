@@ -2,7 +2,7 @@
 
 [简体中文](edgeever-cli-skill-guide.zh-CN.md)
 
-This guide is for people who use the CLI directly or ask an AI agent to operate EdgeEver. It targets EdgeEver server `2.28.2`, CLI `0.8.1`, and file-workspace protocol `1`. See the [CLI README](../cli/README.md) for the complete command and implementation reference, and the [file-workspace documentation](file-workspace.md) for storage and recovery details.
+This guide is for people who use the CLI directly or ask an AI agent to operate EdgeEver. It targets EdgeEver server `2.28.2`, CLI `0.8.2`, and file-workspace protocol `1`. See the [CLI README](../cli/README.md) for the complete command and implementation reference, and the [file-workspace documentation](file-workspace.md) for storage and recovery details.
 
 ## 1. How the CLI, skill, profiles, and tokens relate
 

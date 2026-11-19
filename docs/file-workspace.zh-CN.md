@@ -1,6 +1,6 @@
 # CLI 本地 Markdown 工作目录（正文与附件）
 
-## 当前流程：CLI 0.8.1
+## 当前流程：CLI 0.8.2
 
 首次配置、多 Token 和 Agent Skill 用法见[《EdgeEver CLI 与 Skill 使用手册》](edgeever-cli-skill-guide.zh-CN.md)。本文聚焦文件工作区的存储、同步、冲突与恢复细节。
 

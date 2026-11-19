@@ -1,6 +1,6 @@
 # CLI Markdown file workspace (notes and attachments)
 
-## Current workflow: CLI 0.8.1
+## Current workflow: CLI 0.8.2
 
 See the [EdgeEver CLI and Skill User Guide](edgeever-cli-skill-guide.md) for first-time setup, multiple tokens, and agent-skill usage. This document focuses on file-workspace storage, synchronization, conflicts, and recovery.
 

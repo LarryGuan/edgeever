@@ -2,7 +2,7 @@
 
 [English](edgeever-cli-skill-guide.md)
 
-本手册面向使用 CLI 或让 AI Agent 操作 EdgeEver 的用户。当前适配 EdgeEver 服务端 `2.28.2`、CLI `0.8.1` 和文件工作区协议 `1`。完整命令及实现细节见 [CLI README](../cli/README.zh-CN.md)，文件工作区的存储和恢复细节见[文件工作区说明](file-workspace.zh-CN.md)。
+本手册面向使用 CLI 或让 AI Agent 操作 EdgeEver 的用户。当前适配 EdgeEver 服务端 `2.28.2`、CLI `0.8.2` 和文件工作区协议 `1`。完整命令及实现细节见 [CLI README](../cli/README.zh-CN.md)，文件工作区的存储和恢复细节见[文件工作区说明](file-workspace.zh-CN.md)。
 
 ## 1. CLI、Skill、Profile 和 Token 的关系
 

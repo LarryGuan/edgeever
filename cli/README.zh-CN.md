@@ -1,6 +1,6 @@
 # 知识工作台 EdgeEver CLI
 
-## 当前流程：CLI 0.8.1
+## 当前流程：CLI 0.8.2
 
 第一次配置、多 Token、单篇笔记操作和 Skill 使用请先看[《EdgeEver CLI 与 Skill 使用手册》](../docs/edgeever-cli-skill-guide.zh-CN.md)。本 README 保留完整命令、升级和实现说明。
 
@@ -65,7 +65,7 @@ GC 不扫描或删除用户笔记目录和附件仓库。空间预算针对受�
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.8.1.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.8.2.tgz
 edgeever --help
 ```
 
