@@ -259,5 +259,6 @@ This section records only outcomes that actually occurred; it does not represent
 - Post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`.
 - Second-pass push and deployment: `main` was pushed; Yunxiao pipeline `#15` deployed commit `3dad9018` at 2026-11-19 16:47 CST, with both build and deployment reporting `SUCCESS`.
 - Second-pass post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`, and the `.agents` Skill symlink remains valid.
-- The third pass has not been pushed or deployed.
+- Third-pass push and deployment: `main` was pushed; Yunxiao pipeline `#16` deployed commit `1e0cba9e` at 2026-11-19 20:27 CST, with both build and deployment reporting `SUCCESS`.
+- Third-pass post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`, and the `.agents` Skill symlink remains valid.
 - Unverified: manual desktop/mobile browser interaction, iOS/Android PDF pinch gestures, visual DOCX scaling, production public-share preview, E2E, and production-data content regression.

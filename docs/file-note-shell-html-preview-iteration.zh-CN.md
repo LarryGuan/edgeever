@@ -259,5 +259,6 @@ flowchart TB
 - 部署后回读：`/api/health` 返回 `ok: true`，Migration 为 `0098`；本机 CLI 与 Claude Code Skill 均为 `0.8.2`。
 - 第二轮推送与部署：`main` 已推送；2026-11-19 16:47 CST 通过云效流水线 `#15` 部署提交 `3dad9018`，构建和部署均为 `SUCCESS`。
 - 第二轮部署后回读：`/api/health` 返回 `ok: true`，Migration 为 `0098`；本机 CLI 与 Claude Code Skill 均为 `0.8.2`，`.agents` Skill 软链接保持有效。
-- 第三轮尚未推送或部署。
+- 第三轮推送与部署：`main` 已推送；2026-11-19 20:27 CST 通过云效流水线 `#16` 部署提交 `1e0cba9e`，构建和部署均为 `SUCCESS`。
+- 第三轮部署后回读：`/api/health` 返回 `ok: true`，Migration 为 `0098`；本机 CLI 与 Claude Code Skill 均为 `0.8.2`，`.agents` Skill 软链接保持有效。
 - 未验证项：真实桌面/移动浏览器人工交互、iOS/Android PDF 双指手势、DOCX 视觉缩放、生产公开分享预览、E2E 和生产数据内容回归。
