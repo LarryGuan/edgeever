@@ -9,7 +9,7 @@ Complete the file-note experience added by the Larry fork without modifying the 
 - The upstream `tianma-if/edgeever` `v2.28.2` baseline does not contain `FileDocumentPane`; file notes are a Larry fork capability.
 - Upstream note types intentionally use different headers. They reuse smaller title, metadata, button, and menu components rather than one complete page shell.
 - File selection, drag-and-drop creation, the bottom-right upload task dock, progress, cancellation, continued workspace use, and an explicit interrupted-upload memo instead of a blank memo are already implemented.
-- PDF, image, audio, video, and DOCX Beta previews are already implemented, as are download, replacement, and rename.
+- Before the second pass, PDF, image, audio, video, and DOCX preview with a Beta badge were implemented, as were download, replacement, and rename.
 - Image compression currently converts PNG, JPEG, WebP, or AVIF to WebP when the result is smaller and changes the uploaded filename to `.webp`.
 - The server deliberately keeps HTML attachments as `Content-Disposition: attachment`; this iteration must not make HTML directly inline to enable preview.
 - The first file shell exposed both an editable memo title and a renameable resource filename; they update separate memo and resource records and can therefore diverge.
@@ -43,7 +43,7 @@ Complete the file-note experience added by the Larry fork without modifying the 
 
 ## Relationship Overview
 
-This diagram answers how one editable title and read-only source-file information reach the file-note page and which capabilities the toolbar manages. Legend: solid lines carry core data or rendered results; dashed lines show tool use or management relationships. Node text distinguishes the implemented first pass from the planned second pass.
+This diagram answers how one editable title and read-only source-file information reach the file-note page and which capabilities the toolbar manages. Legend: solid lines carry core data or rendered results; dashed lines show tool use or management relationships. Node text records the state after both implementation passes.
 
 ```mermaid
 flowchart TB
@@ -52,8 +52,8 @@ flowchart TB
         PREPARE["Upload preparation<br/>Images may be optimized to WebP<br/>Implemented"]
         MEMO["Memo identity<br/>Only editable title, notebook, tags<br/>Implemented"]
         RESOURCE[("Read-only primary resource facts<br/>Source filename, MIME, bytes, hash<br/>Implemented")]
-        PANE["Common file-note header<br/>Second-pass refinement"]
-        TOOLBAR["Left-aligned file-type toolbar<br/>Second pass planned"]
+        PANE["Common file-note header<br/>Second pass refined"]
+        TOOLBAR["Left-aligned file-type toolbar<br/>Second pass implemented"]
         REGISTRY["Previewer registry<br/>HTML added in this iteration"]
         RESULT["PDF / media / DOCX / HTML<br/>Full-body preview or safe download fallback"]
 
@@ -67,8 +67,8 @@ flowchart TB
     end
 
     subgraph TOOLS["File note management entry points"]
-        ACTIONS["File information / download / replace<br/>Second pass planned"]
-        PREVIEW_ACTIONS["Zoom / fit / rotate / fullscreen, etc.<br/>Per preview type"]
+        ACTIONS["File information / download / replace<br/>Second pass implemented"]
+        PREVIEW_ACTIONS["Zoom / fit / external open / fullscreen, etc.<br/>Per preview type"]
         SHARE["Share management<br/>Reuse existing capability"]
         UPLOADS["Upload task dock<br/>Progress, cancel, open result<br/>Implemented"]
         IMAGE_EDITOR["Image notes<br/>Keep official ordinary-note editor"]
@@ -99,7 +99,7 @@ The second row is a left-aligned file-type toolbar:
 
 - Common actions are file information, download original, and replace file.
 - A read-only information dialog shows the source filename, type, size, update time, and hash.
-- PDF and similar types append zoom, fit-width, rotate, external-open, or fullscreen controls after a divider.
+- PDF appends zoom, fit-width, external-open, and fullscreen controls after a divider; other types retain their native controls inside the preview body.
 - DOCX does not display a Beta marker.
 - Unsupported formats show a download explanation without a second large file card.
 
@@ -126,7 +126,7 @@ The second row is a left-aligned file-type toolbar:
 - Add a file-note-specific preview layout mode so ordinary-note embedded attachment sizes remain unchanged.
 - PDF and DOCX scroll inside the body; images and video use `object-contain` and never stretch.
 - Audio retains a compact player while its body area still fills the remaining page.
-- PDF zoom, fit-width, rotation, external-open, and fullscreen controls live in the second row; PDF no longer repeats filename, type, download, or collapse inside the preview.
+- PDF zoom, fit-width, external-open, and fullscreen controls live in the second row; PDF no longer repeats filename, type, download, or collapse inside the preview.
 - Preview failure or an unsupported type always retains download access.
 
 ## Safe HTML Preview
@@ -219,9 +219,15 @@ This section records only outcomes that actually occurred; it does not represent
 
 - Pre-development documentation checkpoint: `afc2b0e6` (`docs: plan file note shell and safe preview`).
 - Implementation commit: `d3382906` (`feat: improve file note shell and previews`).
+- Second-pass pre-development documentation checkpoint: `1d65332b` (`docs: plan single-name file note toolbar`).
+- Second-pass implementation commit: `7402fb48` (`feat: refine file note toolbar`).
 - Focused tests: 15 passed and 0 failed; shared locale-catalog tests: 24 passed and 0 failed.
 - Static and build verification: `bun run lint`, `bun run typecheck`, `bun run typecheck:mobile`, and `bun run build:web` all passed.
 - Complete non-E2E verification: 5,906 bulk tests passed and 0 failed; 41 integration tests passed, 1 Windows-only test was skipped on macOS, and 0 failed.
+- Second-pass focused verification: 16 file-note and preview tests passed and 0 failed; 21 locale-catalog tests passed and 0 failed.
+- Second-pass static and build verification: `bun run lint`, `bun run typecheck`, `bun run typecheck:mobile`, and `bun run build:web` all passed.
+- Second-pass complete non-E2E verification: 5,907 bulk tests passed and 0 failed; 41 integration tests passed, 1 Windows-only test was skipped on macOS, and 0 failed.
 - Push and deployment: `main` was pushed; Yunxiao pipeline `#14` deployed commit `0a12ec8c` at 2026-11-19 12:55 CST, with both build and deployment reporting `SUCCESS`.
 - Post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`.
+- Second-pass push and deployment: not performed.
 - Unverified: manual desktop/mobile browser interaction, the production HTML-file preview flow, E2E, and production-data content regression.
