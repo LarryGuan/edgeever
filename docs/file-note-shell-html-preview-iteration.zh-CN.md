@@ -195,5 +195,6 @@ flowchart TB
 - 定向测试：15 项通过、0 失败；共享多语言目录测试 24 项通过、0 失败。
 - 静态与构建验证：`bun run lint`、`bun run typecheck`、`bun run typecheck:mobile`、`bun run build:web` 全部通过。
 - 完整非 E2E 验证：批量测试 5906 项通过、0 失败；集成测试 41 项通过、1 项 Windows 专用测试在 macOS 跳过、0 失败。
-- 未验证项：真实浏览器桌面/移动端人工交互、生产服务器上的 HTML 资源行为、E2E 和生产数据回归。
-- 推送与部署：未执行。
+- 推送与部署：`main` 已推送；2026-11-19 12:55 CST 通过云效流水线 `#14` 部署提交 `0a12ec8c`，构建和部署均为 `SUCCESS`。
+- 部署后回读：`/api/health` 返回 `ok: true`，Migration 为 `0098`；本机 CLI 与 Claude Code Skill 均为 `0.8.2`。
+- 未验证项：真实浏览器桌面/移动端人工交互、生产 HTML 文件预览操作、E2E 和生产数据内容回归。

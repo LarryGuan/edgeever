@@ -195,5 +195,6 @@ This section records only outcomes that actually occurred; it does not represent
 - Focused tests: 15 passed and 0 failed; shared locale-catalog tests: 24 passed and 0 failed.
 - Static and build verification: `bun run lint`, `bun run typecheck`, `bun run typecheck:mobile`, and `bun run build:web` all passed.
 - Complete non-E2E verification: 5,906 bulk tests passed and 0 failed; 41 integration tests passed, 1 Windows-only test was skipped on macOS, and 0 failed.
-- Unverified: manual desktop/mobile browser interaction, production-server HTML resource behavior, E2E, and production-data regression.
-- Push and deployment: not performed.
+- Push and deployment: `main` was pushed; Yunxiao pipeline `#14` deployed commit `0a12ec8c` at 2026-11-19 12:55 CST, with both build and deployment reporting `SUCCESS`.
+- Post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`.
+- Unverified: manual desktop/mobile browser interaction, the production HTML-file preview flow, E2E, and production-data content regression.
