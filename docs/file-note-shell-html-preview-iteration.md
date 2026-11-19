@@ -36,7 +36,7 @@ Complete the file-note experience added by the Larry fork without modifying the 
 
 ## Relationship Overview
 
-This diagram answers how a file becomes a manageable file note and which existing capabilities its dedicated shell uses. Legend: solid lines carry core data or rendered results; dashed lines show tool use or management relationships. Node text explicitly marks implemented and planned states.
+This diagram answers how a file becomes a manageable file note and which existing capabilities its dedicated shell uses. Legend: solid lines carry core data or rendered results; dashed lines show tool use or management relationships. Node text records the state after this iteration.
 
 ```mermaid
 flowchart TB
@@ -45,8 +45,8 @@ flowchart TB
         PREPARE["Upload preparation<br/>Images may be optimized to WebP<br/>Implemented"]
         MEMO["Memo identity<br/>Title, notebook, tags<br/>Implemented"]
         RESOURCE[("Primary resource<br/>Filename, MIME, bytes, hash<br/>Implemented")]
-        PANE["Dedicated file note shell<br/>Planned"]
-        REGISTRY["Previewer registry<br/>Implemented; HTML planned"]
+        PANE["Dedicated file note shell<br/>Implemented in this iteration"]
+        REGISTRY["Previewer registry<br/>HTML added in this iteration"]
         RESULT["PDF / image / media / DOCX / HTML<br/>Full-body preview or safe download fallback"]
 
         INPUT -->|"Original file and filename"| PREPARE
@@ -78,7 +78,7 @@ The first row contains memo-level information:
 - Editable memo title.
 - Current notebook and move control.
 - Tag editing.
-- Share entry and overflow menu.
+- Share entry.
 - Mobile back action.
 - Saving, failure, or read-only feedback when applicable.
 
@@ -101,7 +101,7 @@ The second row is a compact file toolbar:
 
 - Title and tag updates use the existing memo edit session, `expectedRevision`, and `expectedContentHash`.
 - Metadata updates preserve the file marker, legacy attachment link, and primary-resource relationship unchanged.
-- Revision conflicts must not overwrite silently; reload the server version and ask the user to retry.
+- Revision conflicts must not overwrite silently; show a non-blocking save-error state in the header while retaining the page and local input for retry.
 - Notebook moves use the existing `moveMemos` operation.
 - Success refreshes the current detail, memo lists, notebook counts, and attachment source metadata.
 
@@ -120,7 +120,7 @@ The second row is a compact file toolbar:
 
 - Match `.html`, `.htm`, or `text/html`.
 - The first version supports UTF-8 static HTML up to 5 MiB.
-- Allow inline CSS and `data:` / `blob:` images.
+- Allow inline CSS and `data:` image, media, and font resources.
 - Do not resolve sibling relative assets, load external network resources, or execute scripts.
 
 ### Security rules
@@ -188,9 +188,12 @@ The second row is a compact file toolbar:
 
 ## Post-implementation Record
 
-Complete this section only after development, tests, commits, push, and deployment actually occur. Do not pre-fill success conclusions.
+This section records only outcomes that actually occurred; it does not represent an unperformed push or deployment as successful.
 
-- Actual commits: pending.
-- Test results: pending.
-- Unverified items: pending.
+- Pre-development documentation checkpoint: `afc2b0e6` (`docs: plan file note shell and safe preview`).
+- Implementation commit: `d3382906` (`feat: improve file note shell and previews`).
+- Focused tests: 15 passed and 0 failed; shared locale-catalog tests: 24 passed and 0 failed.
+- Static and build verification: `bun run lint`, `bun run typecheck`, `bun run typecheck:mobile`, and `bun run build:web` all passed.
+- Complete non-E2E verification: 5,906 bulk tests passed and 0 failed; 41 integration tests passed, 1 Windows-only test was skipped on macOS, and 0 failed.
+- Unverified: manual desktop/mobile browser interaction, production-server HTML resource behavior, E2E, and production-data regression.
 - Push and deployment: not performed.
