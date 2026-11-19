@@ -38,12 +38,12 @@
 - 不修改已上传旧图片的显示类型；无法可靠恢复已经丢失的原始扩展名。
 - 不实现 Office 编辑、D2 预览/编辑、XLSX/PPTX 预览或外部文档 SDK。
 - 不实现刷新或关闭浏览器后的自动断点续传。现有上传任务面板和中断笔记继续作为 v1 恢复边界。
-- 不把文件分享页升级为完整在线预览页；本轮只复用现有分享管理和附件访问行为。
+- 第一、二轮不升级文件分享页；第三轮已在不改变既有分享鉴权的前提下接入只读文件预览。
 - 不删除资源 `filename`、资源重命名 API 或附件管理中的重命名能力；只从文件笔记主界面移除重命名入口。
 
 ## 关系概览
 
-本图回答“一个可编辑标题和只读源文件信息怎样进入文件笔记页面，以及工具条管理哪些能力”。图例：实线表示核心数据或渲染结果传递，虚线表示工具使用或管理关系。节点文字记录两轮实现后的状态。
+本图回答“一个可编辑标题和只读源文件信息怎样进入私有页面与公开分享，以及工具条管理哪些能力”。图例：实线表示核心数据、授权资源或渲染结果传递，虚线表示工具使用或管理关系。节点文字记录三轮实现后的状态。
 
 ```mermaid
 flowchart TB
@@ -70,6 +70,8 @@ flowchart TB
         ACTIONS["文件信息 / 下载 / 替换<br/>第二轮已实现"]
         PREVIEW_ACTIONS["缩放 / 适宽 / 外部打开 / 全屏等<br/>按类型提供"]
         SHARE["分享管理<br/>复用现有能力"]
+        PUBLIC_AUTH["既有公开分享鉴权<br/>Token、密码、有效期、资源归属"]
+        PUBLIC_PREVIEW["公开只读文件预览<br/>单篇分享 / 笔记本网站<br/>第三轮已实现"]
         UPLOADS["上传任务面板<br/>进度、取消、打开结果<br/>已实现"]
         IMAGE_EDITOR["图片笔记<br/>保持官方普通编辑器"]
     end
@@ -78,6 +80,9 @@ flowchart TB
     TOOLBAR -.->|"管理主文件"| ACTIONS
     TOOLBAR -.->|"控制预览"| PREVIEW_ACTIONS
     PANE -.->|"管理笔记分享"| SHARE
+    SHARE -.->|"创建或管理公开链接"| PUBLIC_AUTH
+    RESOURCE -->|"归属校验后的公开资源"| PUBLIC_AUTH
+    PUBLIC_AUTH -->|"授权文件与格式"| PUBLIC_PREVIEW
     UPLOADS -.->|"打开已完成笔记"| PANE
     INPUT -.->|"图片走既有正文链路"| IMAGE_EDITOR
 ```
@@ -239,14 +244,20 @@ flowchart TB
 - 实现提交：`d3382906`（`feat: improve file note shell and previews`）。
 - 第二轮开发前文档检查点：`1d65332b`（`docs: plan single-name file note toolbar`）。
 - 第二轮实现提交：`7402fb48`（`feat: refine file note toolbar`）。
+- 第三轮开发前文档检查点：`03908fb7`（`docs: plan file preview and share controls`）。
+- 第三轮实现提交：`68cdd7ec`（`feat: improve file preview controls and sharing`）。
 - 定向测试：15 项通过、0 失败；共享多语言目录测试 24 项通过、0 失败。
 - 静态与构建验证：`bun run lint`、`bun run typecheck`、`bun run typecheck:mobile`、`bun run build:web` 全部通过。
 - 完整非 E2E 验证：批量测试 5906 项通过、0 失败；集成测试 41 项通过、1 项 Windows 专用测试在 macOS 跳过、0 失败。
 - 第二轮定向验证：文件笔记与预览测试 16 项通过、0 失败；多语言目录测试 21 项通过、0 失败。
 - 第二轮静态与构建验证：`bun run lint`、`bun run typecheck`、`bun run typecheck:mobile`、`bun run build:web` 全部通过。
 - 第二轮完整非 E2E 验证：批量测试 5907 项通过、0 失败；集成测试 41 项通过、1 项 Windows 专用测试在 macOS 跳过、0 失败。
+- 第三轮定向验证：核心文件预览与分享测试 109 项通过、0 失败；公开分享链接最终复核 84 项通过、0 失败。
+- 第三轮静态与构建验证：`bun run lint`、`bun run typecheck`、`bun run typecheck:mobile`、`bun run build:web` 全部通过。
+- 第三轮完整非 E2E 验证：批量测试 5912 项通过、0 失败；集成测试 41 项通过、1 项 Windows 专用测试在 macOS 跳过、0 失败。
 - 推送与部署：`main` 已推送；2026-11-19 12:55 CST 通过云效流水线 `#14` 部署提交 `0a12ec8c`，构建和部署均为 `SUCCESS`。
 - 部署后回读：`/api/health` 返回 `ok: true`，Migration 为 `0098`；本机 CLI 与 Claude Code Skill 均为 `0.8.2`。
 - 第二轮推送与部署：`main` 已推送；2026-11-19 16:47 CST 通过云效流水线 `#15` 部署提交 `3dad9018`，构建和部署均为 `SUCCESS`。
 - 第二轮部署后回读：`/api/health` 返回 `ok: true`，Migration 为 `0098`；本机 CLI 与 Claude Code Skill 均为 `0.8.2`，`.agents` Skill 软链接保持有效。
-- 未验证项：真实浏览器桌面/移动端人工交互、生产 HTML 文件预览操作、E2E 和生产数据内容回归。
+- 第三轮尚未推送或部署。
+- 未验证项：真实桌面/移动浏览器人工交互、iOS/Android PDF 双指手势、DOCX 视觉缩放、生产公开分享预览、E2E 和生产数据内容回归。

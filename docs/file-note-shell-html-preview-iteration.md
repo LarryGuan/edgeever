@@ -38,12 +38,12 @@ Complete the file-note experience added by the Larry fork without modifying the 
 - Do not rewrite the displayed type of existing images; their lost original extension cannot be recovered reliably.
 - Do not add Office editing, D2 preview/editing, XLSX/PPTX preview, or an external document SDK.
 - Do not add automatic resume after a browser refresh or close. The existing upload dock and interrupted memo remain the v1 recovery boundary.
-- Do not turn public file-note shares into full online preview pages; reuse the existing share management and attachment access behavior only.
+- The first two passes do not upgrade public file-note pages; the third pass adds read-only file preview without changing the existing share authorization model.
 - Do not remove resource `filename`, the resource rename API, or rename support in attachment management; remove rename only from the primary file-note UI.
 
 ## Relationship Overview
 
-This diagram answers how one editable title and read-only source-file information reach the file-note page and which capabilities the toolbar manages. Legend: solid lines carry core data or rendered results; dashed lines show tool use or management relationships. Node text records the state after both implementation passes.
+This diagram answers how one editable title and read-only source-file information reach private pages and public shares and which capabilities the toolbar manages. Legend: solid lines carry core data, authorized resources, or rendered results; dashed lines show tool use or management relationships. Node text records the state after all three implementation passes.
 
 ```mermaid
 flowchart TB
@@ -70,6 +70,8 @@ flowchart TB
         ACTIONS["File information / download / replace<br/>Second pass implemented"]
         PREVIEW_ACTIONS["Zoom / fit / external open / fullscreen, etc.<br/>Per preview type"]
         SHARE["Share management<br/>Reuse existing capability"]
+        PUBLIC_AUTH["Existing public-share authorization<br/>Token, password, expiry, resource ownership"]
+        PUBLIC_PREVIEW["Public read-only file preview<br/>Single share / notebook site<br/>Third pass implemented"]
         UPLOADS["Upload task dock<br/>Progress, cancel, open result<br/>Implemented"]
         IMAGE_EDITOR["Image notes<br/>Keep official ordinary-note editor"]
     end
@@ -78,6 +80,9 @@ flowchart TB
     TOOLBAR -.->|"Manage primary file"| ACTIONS
     TOOLBAR -.->|"Control preview"| PREVIEW_ACTIONS
     PANE -.->|"Manage memo share"| SHARE
+    SHARE -.->|"Create or manage a public link"| PUBLIC_AUTH
+    RESOURCE -->|"Public resource after ownership check"| PUBLIC_AUTH
+    PUBLIC_AUTH -->|"Authorized file and format"| PUBLIC_PREVIEW
     UPLOADS -.->|"Open completed memo"| PANE
     INPUT -.->|"Images keep the existing content path"| IMAGE_EDITOR
 ```
@@ -239,14 +244,20 @@ This section records only outcomes that actually occurred; it does not represent
 - Implementation commit: `d3382906` (`feat: improve file note shell and previews`).
 - Second-pass pre-development documentation checkpoint: `1d65332b` (`docs: plan single-name file note toolbar`).
 - Second-pass implementation commit: `7402fb48` (`feat: refine file note toolbar`).
+- Third-pass pre-development documentation checkpoint: `03908fb7` (`docs: plan file preview and share controls`).
+- Third-pass implementation commit: `68cdd7ec` (`feat: improve file preview controls and sharing`).
 - Focused tests: 15 passed and 0 failed; shared locale-catalog tests: 24 passed and 0 failed.
 - Static and build verification: `bun run lint`, `bun run typecheck`, `bun run typecheck:mobile`, and `bun run build:web` all passed.
 - Complete non-E2E verification: 5,906 bulk tests passed and 0 failed; 41 integration tests passed, 1 Windows-only test was skipped on macOS, and 0 failed.
 - Second-pass focused verification: 16 file-note and preview tests passed and 0 failed; 21 locale-catalog tests passed and 0 failed.
 - Second-pass static and build verification: `bun run lint`, `bun run typecheck`, `bun run typecheck:mobile`, and `bun run build:web` all passed.
 - Second-pass complete non-E2E verification: 5,907 bulk tests passed and 0 failed; 41 integration tests passed, 1 Windows-only test was skipped on macOS, and 0 failed.
+- Third-pass focused verification: 109 core file-preview and sharing tests passed and 0 failed; the final public-link review ran 84 tests with 0 failures.
+- Third-pass static and build verification: `bun run lint`, `bun run typecheck`, `bun run typecheck:mobile`, and `bun run build:web` all passed.
+- Third-pass complete non-E2E verification: 5,912 bulk tests passed and 0 failed; 41 integration tests passed, 1 Windows-only test was skipped on macOS, and 0 failed.
 - Push and deployment: `main` was pushed; Yunxiao pipeline `#14` deployed commit `0a12ec8c` at 2026-11-19 12:55 CST, with both build and deployment reporting `SUCCESS`.
 - Post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`.
 - Second-pass push and deployment: `main` was pushed; Yunxiao pipeline `#15` deployed commit `3dad9018` at 2026-11-19 16:47 CST, with both build and deployment reporting `SUCCESS`.
 - Second-pass post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`, and the `.agents` Skill symlink remains valid.
-- Unverified: manual desktop/mobile browser interaction, the production HTML-file preview flow, E2E, and production-data content regression.
+- The third pass has not been pushed or deployed.
+- Unverified: manual desktop/mobile browser interaction, iOS/Android PDF pinch gestures, visual DOCX scaling, production public-share preview, E2E, and production-data content regression.
