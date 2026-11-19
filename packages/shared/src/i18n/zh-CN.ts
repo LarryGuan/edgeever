@@ -2650,6 +2650,11 @@ export const zhCN = {
     filenameLabel: "文件名",
     renameFailed: "文件重命名失败，请重试。",
     previewBeta: "Beta 预览",
+    htmlPreviewLoading: "正在加载 HTML 预览…",
+    htmlPreviewTitle: "HTML 预览：{{filename}}",
+    htmlPreviewTooLarge: "HTML 文件超过 5 MB，请下载后查看。",
+    htmlPreviewEncoding: "HTML 文件不是有效的 UTF-8 编码，请下载后查看。",
+    htmlPreviewFailed: "HTML 预览加载失败，仍可下载文件。",
   },
   memoCard: {
     yesterday: "昨天",

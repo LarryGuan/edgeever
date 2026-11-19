@@ -66,6 +66,24 @@ describe("shared file note", () => {
     expect(updated.contentJson.content.some((node) => node.type === "image")).toBe(true);
   });
 
+  test("keeps the uploaded image filename in the note when storage converts it to webp", async () => {
+    let updated = null;
+    await createSharedFileMemo({
+      notebookId: "nb_inbox",
+      filename: "原图.png",
+      file: new File(["png"], "原图.png", { type: "image/png" }),
+      createMemo: async (input) => ({ memo: { ...memo, title: input.title } }),
+      prepareFile: async () => new File(["webp"], "原图.webp", { type: "image/webp" }),
+      uploadResource: async () => ({ url: "edgeever-staged://image.webp", filename: "原图.webp" }),
+      updateMemo: async (created, content) => {
+        updated = content;
+        return { memo: { ...created, contentMarkdown: content.contentMarkdown } };
+      },
+    });
+    expect(updated.contentMarkdown).toContain("![原图.png](edgeever-staged://image.webp)");
+    expect(updated.contentMarkdown).not.toContain("![原图.webp]");
+  });
+
   test("stores a pdf as a pdf attachment", async () => {
     let updated = null;
     await createSharedFileMemo({

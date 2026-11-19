@@ -2826,7 +2826,10 @@ export const de = {
     "readOnlyDescription": "This file can be downloaded or replaced. Preview and editing are not supported yet.", "download": "Download", "replace": "Replace file", "replacing": "Replacing…",
     "replaceFailed": "The file could not be replaced. Refresh and try again.",
     "renameTitle": "Datei umbenennen", "renameDescription": "Ändert den Dateinamen, aber nicht die Erweiterung. Der Notiztitel bleibt unabhängig.", "filenameLabel": "Dateiname",
-    "renameFailed": "Die Datei konnte nicht umbenannt werden.", "previewBeta": "Beta-Vorschau"
+    "renameFailed": "Die Datei konnte nicht umbenannt werden.", "previewBeta": "Beta-Vorschau",
+    "htmlPreviewLoading": "Loading HTML preview…", "htmlPreviewTitle": "HTML preview: {{filename}}",
+    "htmlPreviewTooLarge": "This HTML file is larger than 5 MB. Download it to view it.", "htmlPreviewEncoding": "This HTML file is not valid UTF-8. Download it to view it.",
+    "htmlPreviewFailed": "The HTML preview could not be loaded. You can still download the file."
   },
   "memoCard": {
     "yesterday": "Gestern",

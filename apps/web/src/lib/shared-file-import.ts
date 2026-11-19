@@ -94,7 +94,7 @@ export const createSharedFileMemo = async <TMemo extends SharedMemo>(input: {
     const fallbackMarkdown = sharedFileAttachmentMarkdown(filename, resource.url);
     const fallbackContent = attachmentNoteContent(fallbackMarkdown);
     const content = isImageFile(filename, prepared.type || input.file.type)
-      ? screenshotNoteContent(filename, resource.url)
+      ? screenshotNoteContent(input.filename.trim() || filename, resource.url)
       : {
           contentJson: fallbackContent.contentJson,
           contentMarkdown: `${serializeFileDocumentMarker({

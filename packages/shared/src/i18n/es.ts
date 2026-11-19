@@ -2826,7 +2826,10 @@ export const es = {
     "readOnlyDescription": "This file can be downloaded or replaced. Preview and editing are not supported yet.", "download": "Download", "replace": "Replace file", "replacing": "Replacing…",
     "replaceFailed": "The file could not be replaced. Refresh and try again.",
     "renameTitle": "Cambiar nombre del archivo", "renameDescription": "Cambia el nombre sin modificar la extensión. El título de la nota es independiente.", "filenameLabel": "Nombre del archivo",
-    "renameFailed": "No se pudo cambiar el nombre del archivo.", "previewBeta": "Vista previa beta"
+    "renameFailed": "No se pudo cambiar el nombre del archivo.", "previewBeta": "Vista previa beta",
+    "htmlPreviewLoading": "Loading HTML preview…", "htmlPreviewTitle": "HTML preview: {{filename}}",
+    "htmlPreviewTooLarge": "This HTML file is larger than 5 MB. Download it to view it.", "htmlPreviewEncoding": "This HTML file is not valid UTF-8. Download it to view it.",
+    "htmlPreviewFailed": "The HTML preview could not be loaded. You can still download the file."
   },
   "memoCard": {
     "yesterday": "Ayer",

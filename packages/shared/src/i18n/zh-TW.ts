@@ -2641,6 +2641,9 @@ export const zhTW = {
     replaceFailed: "檔案取代失敗，請重新整理後再試。",
     renameTitle: "重新命名檔案", renameDescription: "只修改檔案名稱，不改變副檔名；筆記標題保持獨立。", filenameLabel: "檔案名稱",
     renameFailed: "檔案重新命名失敗，請再試一次。", previewBeta: "Beta 預覽",
+    htmlPreviewLoading: "正在載入 HTML 預覽…", htmlPreviewTitle: "HTML 預覽：{{filename}}",
+    htmlPreviewTooLarge: "HTML 檔案超過 5 MB，請下載後查看。", htmlPreviewEncoding: "HTML 檔案不是有效的 UTF-8 編碼，請下載後查看。",
+    htmlPreviewFailed: "HTML 預覽載入失敗，仍可下載檔案。",
   },
   memoCard: {
     yesterday: "昨天",

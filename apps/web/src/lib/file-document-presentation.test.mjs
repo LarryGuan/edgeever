@@ -12,6 +12,8 @@ describe("file document presentation", () => {
     expect(resolveFileDocumentPreviewer({ filename: "voice.mp3", mimeType: "audio/mpeg" }).kind).toBe("audio");
     expect(resolveFileDocumentPreviewer({ filename: "clip.mp4", mimeType: "video/mp4" }).kind).toBe("video");
     expect(resolveFileDocumentPreviewer({ filename: "proposal.DOCX", mimeType: null })).toMatchObject({ kind: "docx", beta: true });
+    expect(resolveFileDocumentPreviewer({ filename: "dashboard.HTML", mimeType: null }).kind).toBe("html");
+    expect(resolveFileDocumentPreviewer({ filename: "page.bin", mimeType: "text/html" }).kind).toBe("html");
     expect(resolveFileDocumentPreviewer({ filename: "table.xlsx", mimeType: null }).kind).toBe("download");
   });
 

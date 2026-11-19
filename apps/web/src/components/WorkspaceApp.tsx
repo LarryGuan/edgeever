@@ -3914,12 +3914,22 @@ export const WorkspaceApp = ({
                       {selectedMemo && selectedMemo.document?.storageMode === "resource" && memoView !== "trash" ? (
                         <FileDocumentPane
                           memo={selectedMemo}
+                          notebooks={notebooks}
                           repository={repository}
                           readOnly={selectedMemo.isDeleted}
                           onBackToList={() => {
                             clearPendingCreatedMemo();
                             setSelectedMemoId(null);
                             setActivePane("memos");
+                          }}
+                          onSaved={async (memo) => {
+                            await putLocalMemo(localDataScope, memo);
+                            cacheMemoDetail(queryClient, memo, memoView);
+                            updateMemoSummaryInLists(queryClient, memoToSummary(memo));
+                            await Promise.all([
+                              queryClient.invalidateQueries({ queryKey: ["memos"], refetchType: "inactive" }),
+                              queryClient.invalidateQueries({ queryKey: ["notebooks"], refetchType: "inactive" }),
+                            ]);
                           }}
                         />
                       ) : selectedMemo && selectedDiagram ? (

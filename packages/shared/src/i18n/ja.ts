@@ -2630,6 +2630,9 @@ export const ja = {
     replaceFailed: "The file could not be replaced. Refresh and try again.",
     renameTitle: "ファイル名を変更", renameDescription: "拡張子は変更せず、ファイル名だけを変更します。ノートのタイトルは別に保持されます。", filenameLabel: "ファイル名",
     renameFailed: "ファイル名を変更できませんでした。", previewBeta: "ベータプレビュー",
+    htmlPreviewLoading: "Loading HTML preview…", htmlPreviewTitle: "HTML preview: {{filename}}",
+    htmlPreviewTooLarge: "This HTML file is larger than 5 MB. Download it to view it.", htmlPreviewEncoding: "This HTML file is not valid UTF-8. Download it to view it.",
+    htmlPreviewFailed: "The HTML preview could not be loaded. You can still download the file.",
   },
   memoCard: {
     yesterday: "昨日",

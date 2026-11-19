@@ -2641,6 +2641,9 @@ export const ru = {
     replaceFailed: "The file could not be replaced. Refresh and try again.",
     renameTitle: "Переименовать файл", renameDescription: "Изменяет имя, не меняя расширение. Заголовок заметки остаётся отдельным.", filenameLabel: "Имя файла",
     renameFailed: "Не удалось переименовать файл.", previewBeta: "Бета-просмотр",
+    htmlPreviewLoading: "Loading HTML preview…", htmlPreviewTitle: "HTML preview: {{filename}}",
+    htmlPreviewTooLarge: "This HTML file is larger than 5 MB. Download it to view it.", htmlPreviewEncoding: "This HTML file is not valid UTF-8. Download it to view it.",
+    htmlPreviewFailed: "The HTML preview could not be loaded. You can still download the file.",
   },
   memoCard: {
     yesterday: "Вчера",

@@ -1,37 +1,75 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Download, Loader2, Pencil, Upload } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, Download, Loader2, Pencil, Share2, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AttachmentFileIcon } from "@/components/attachments/AttachmentFileIcon";
+import { ShareMemoDialog } from "@/components/dialogs/ShareMemoDialog";
+import { IconTooltip } from "@/components/editor/EditorPaneChrome";
+import { createLocalEditSession } from "@/components/editor/editor-pane-helpers";
 import { FileDocumentPreview } from "@/components/file-document/FileDocumentPreview";
 import { FileDocumentRenameDialog } from "@/components/file-document/FileDocumentRenameDialog";
+import { MemoEditorMetadataRow } from "@/components/MemoEditorMetadataRow";
+import { MEMO_EDITOR_METADATA_ROW_CLASS_NAME, MEMO_EDITOR_TOP_ROW_CLASS_NAME } from "@/components/MemoEditorChromeDensity";
+import { MemoEditorTopRowLeading } from "@/components/MemoEditorTopRowLeading";
+import { MemoTitleInput } from "@/components/MemoTitleInput";
 import { Button } from "@/components/ui/button";
-import { formatBytes } from "@/lib/format-bytes";
-import { resolveFileDocumentPreviewer } from "@/lib/file-document-presentation";
-import type { EdgeEverRepository } from "@/lib/repository";
+import { getNotebookMoveOptions } from "@/lib/app-helpers";
 import { toDesktopResourceDownloadUrl } from "@/lib/desktop-resources";
-import type { MemoDetail, Resource } from "@edgeever/shared";
+import { resolveFileDocumentPreviewer } from "@/lib/file-document-presentation";
+import { formatBytes } from "@/lib/format-bytes";
+import type { EdgeEverRepository } from "@/lib/repository";
+import { parseTagsText } from "@/lib/utils";
+import type { MemoDetail, Notebook, Resource } from "@edgeever/shared";
+
+type MetadataFields = { title: string; tagsText: string };
+type SavePhase = "idle" | "saving" | "saved" | "error";
+
+const metadataFieldsFromMemo = (memo: MemoDetail): MetadataFields => ({
+  title: memo.title ?? "",
+  tagsText: memo.tags.join(", "),
+});
+
+const sameMetadataFields = (first: MetadataFields, second: MetadataFields) =>
+  first.title === second.title && first.tagsText === second.tagsText;
 
 export const FileDocumentPane = ({
   memo,
+  notebooks,
   repository,
   readOnly = false,
   onBackToList,
+  onSaved,
 }: {
   memo: MemoDetail;
+  notebooks: Notebook[];
   repository: EdgeEverRepository;
   readOnly?: boolean;
   onBackToList: () => void;
+  onSaved: (memo: MemoDetail) => Promise<void>;
 }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const memoRef = useRef(memo);
+  const fieldsRef = useRef<MetadataFields>(metadataFieldsFromMemo(memo));
+  const savedFieldsRef = useRef<MetadataFields>(metadataFieldsFromMemo(memo));
+  const savePromiseRef = useRef<Promise<boolean> | null>(null);
+  const pendingSaveRef = useRef(false);
+  const flushMetadataRef = useRef<() => Promise<boolean>>(async () => true);
+  const [title, setTitle] = useState(memo.title ?? "");
+  const [tagsText, setTagsText] = useState(memo.tags.join(", "));
+  const [selectedNotebookId, setSelectedNotebookId] = useState(memo.notebookId);
+  const [savePhase, setSavePhase] = useState<SavePhase>("idle");
+  const [mobileNotebookPickerOpen, setMobileNotebookPickerOpen] = useState(false);
+  const [notebookUpdatePending, setNotebookUpdatePending] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [replaceError, setReplaceError] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
+  const notebookOptions = useMemo(() => getNotebookMoveOptions(notebooks), [notebooks]);
   const resourcesQuery = useQuery({
     queryKey: ["memo-resources", memo.id],
     queryFn: () => repository.listMemoResources(memo.id),
@@ -43,6 +81,106 @@ export const FileDocumentPane = ({
     ?? null;
   const previewer = primary ? resolveFileDocumentPreviewer(primary) : null;
 
+  useEffect(() => {
+    const fields = metadataFieldsFromMemo(memo);
+    memoRef.current = memo;
+    fieldsRef.current = fields;
+    savedFieldsRef.current = fields;
+    savePromiseRef.current = null;
+    pendingSaveRef.current = false;
+    setTitle(fields.title);
+    setTagsText(fields.tagsText);
+    setSelectedNotebookId(memo.notebookId);
+    setSavePhase("idle");
+  }, [memo.id]);
+
+  const flushMetadata = useCallback((): Promise<boolean> => {
+    if (readOnly || sameMetadataFields(fieldsRef.current, savedFieldsRef.current)) return Promise.resolve(true);
+    if (savePromiseRef.current) {
+      pendingSaveRef.current = true;
+      return savePromiseRef.current;
+    }
+
+    const fields = { ...fieldsRef.current };
+    const source = memoRef.current;
+    setSavePhase("saving");
+    const promise = repository.updateMemo(source, {
+      expectedRevision: source.revision,
+      expectedContentHash: source.contentHash,
+      editSessionId: createLocalEditSession(source).id,
+      title: fields.title,
+      contentJson: source.contentJson,
+      contentMarkdown: source.contentMarkdown,
+      tags: parseTagsText(fields.tagsText),
+    }, { guardLocalSnapshot: true })
+      .then(async ({ memo: savedMemo }) => {
+        if (memoRef.current.id === source.id) {
+          memoRef.current = savedMemo;
+          savedFieldsRef.current = fields;
+        }
+        await onSaved(savedMemo);
+        if (memoRef.current.id === source.id && sameMetadataFields(fieldsRef.current, fields)) setSavePhase("saved");
+        return true;
+      })
+      .catch(() => {
+        if (memoRef.current.id === source.id) setSavePhase("error");
+        return false;
+      })
+      .finally(() => {
+        if (savePromiseRef.current === promise) {
+          savePromiseRef.current = null;
+          if (pendingSaveRef.current) {
+            pendingSaveRef.current = false;
+            window.setTimeout(() => void flushMetadataRef.current(), 0);
+          }
+        }
+      });
+    savePromiseRef.current = promise;
+    return promise;
+  }, [onSaved, readOnly, repository]);
+  flushMetadataRef.current = flushMetadata;
+
+  useEffect(() => {
+    if (readOnly || sameMetadataFields(fieldsRef.current, savedFieldsRef.current)) return;
+    const timer = window.setTimeout(() => void flushMetadata(), 600);
+    return () => window.clearTimeout(timer);
+  }, [flushMetadata, readOnly, tagsText, title]);
+
+  const updateFields = (next: MetadataFields) => {
+    fieldsRef.current = next;
+    setTitle(next.title);
+    setTagsText(next.tagsText);
+    setSavePhase("idle");
+  };
+
+  const flushAllMetadata = async () => {
+    const first = await flushMetadata();
+    if (!first) return false;
+    return sameMetadataFields(fieldsRef.current, savedFieldsRef.current) ? true : flushMetadata();
+  };
+
+  const handleBack = async () => {
+    if (await flushAllMetadata()) onBackToList();
+  };
+
+  const handleNotebookChange = async (notebookId: string) => {
+    if (notebookId === selectedNotebookId || notebookUpdatePending) return;
+    setNotebookUpdatePending(true);
+    try {
+      if (!(await flushAllMetadata())) return;
+      await repository.moveMemos({ memoIds: [memo.id], notebookId });
+      const movedMemo = (await repository.getMemo(memo.id)).memo;
+      memoRef.current = movedMemo;
+      setSelectedNotebookId(notebookId);
+      setMobileNotebookPickerOpen(false);
+      await onSaved(movedMemo);
+    } catch {
+      setSavePhase("error");
+    } finally {
+      setNotebookUpdatePending(false);
+    }
+  };
+
   const replaceFile = async (file: File) => {
     if (!primary?.sha256 || replacing) return;
     setReplacing(true);
@@ -50,9 +188,7 @@ export const FileDocumentPane = ({
     try {
       const result = await repository.updateResource(primary.id, file, primary.sha256);
       queryClient.setQueryData<{ resources: Resource[] }>(["memo-resources", memo.id], (current) => ({
-        resources: (current?.resources ?? resources).map((resource) => (
-          resource.id === result.resource.id ? result.resource : resource
-        )),
+        resources: (current?.resources ?? resources).map((resource) => resource.id === result.resource.id ? result.resource : resource),
       }));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["memos"] }),
@@ -73,9 +209,7 @@ export const FileDocumentPane = ({
     try {
       const result = await repository.renameResource(primary.id, filename);
       queryClient.setQueryData<{ resources: Resource[] }>(["memo-resources", memo.id], (current) => ({
-        resources: (current?.resources ?? resources).map((resource) => (
-          resource.id === result.resource.id ? result.resource : resource
-        )),
+        resources: (current?.resources ?? resources).map((resource) => resource.id === result.resource.id ? result.resource : resource),
       }));
       await queryClient.invalidateQueries({ queryKey: ["resources"] });
       setRenameOpen(false);
@@ -86,93 +220,136 @@ export const FileDocumentPane = ({
     }
   };
 
+  const saveLabel = savePhase === "saving"
+    ? t("editor.saveState.saving")
+    : savePhase === "error"
+      ? t("editor.saveState.error")
+      : savePhase === "idle" && !sameMetadataFields(fieldsRef.current, savedFieldsRef.current)
+        ? t("editor.saveState.unsaved")
+        : t("editor.saveState.saved");
+
   return (
     <section className="flex h-full min-h-0 flex-col bg-card">
-      <header className="flex min-h-14 items-center gap-2 border-b border-slate-200 px-3 sm:px-5">
-        <Button type="button" variant="ghost" size="icon" onClick={onBackToList} aria-label={t("common.back")}>
-          <ChevronLeft className="h-5 w-5" />
-        </Button>
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold text-slate-950">{memo.title || t("fileNote.title")}</h1>
-          <p className="text-xs text-slate-500">{t("fileNote.title")}</p>
+      <header className="shrink-0 border-b border-[var(--workspace-divider)] bg-card">
+        <div className={`${MEMO_EDITOR_TOP_ROW_CLASS_NAME} px-4`}>
+          <MemoEditorTopRowLeading
+            mobileBackButton={(
+              <IconTooltip label={t("editor.backToList")}>
+                <Button type="button" variant="ghost" size="icon" disabled={savePhase === "saving"} onClick={() => void handleBack()} aria-label={t("editor.backToList")}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </IconTooltip>
+            )}
+            titleInput={(
+              <MemoTitleInput
+                className="w-full min-w-0 px-2"
+                value={title}
+                readOnly={readOnly}
+                onValueChange={(nextTitle) => updateFields({ title: nextTitle, tagsText: fieldsRef.current.tagsText })}
+                placeholder={t("common.untitledMemo")}
+              />
+            )}
+          />
+          <MemoEditorMetadataRow
+            rowClassName={MEMO_EDITOR_METADATA_ROW_CLASS_NAME}
+            contentMarkdown={memoRef.current.contentMarkdown}
+            disabled={readOnly}
+            mobileNotebookPickerOpen={mobileNotebookPickerOpen}
+            notebookOptions={notebookOptions}
+            notebookUpdatePending={notebookUpdatePending || savePhase === "saving"}
+            repository={repository}
+            selectedNotebookId={selectedNotebookId}
+            tagsText={tagsText}
+            title={title}
+            onMobileNotebookPickerOpenChange={setMobileNotebookPickerOpen}
+            onNotebookChange={(notebookId) => void handleNotebookChange(notebookId)}
+            onTagsChange={(nextTagsText) => updateFields({ title: fieldsRef.current.title, tagsText: nextTagsText })}
+            trailingActions={(
+              <>
+                <span className={`hidden items-center gap-1 rounded-md px-2 py-1 text-xs sm:flex ${savePhase === "error" ? "bg-rose-50 text-rose-700" : "text-slate-400"}`}>
+                  {savePhase === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : savePhase === "error" ? <AlertCircle className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                  {saveLabel}
+                </span>
+                <IconTooltip label={t("sharing.title")}>
+                  <Button type="button" className="h-8 w-8 text-slate-500" size="icon" variant="ghost" disabled={readOnly} aria-label={t("sharing.title")} onClick={() => setShareOpen(true)}>
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                </IconTooltip>
+              </>
+            )}
+          />
         </div>
+
+        {primary ? (
+          <div className="flex min-h-12 items-center gap-3 border-t border-slate-100 px-4 py-1.5">
+            <AttachmentFileIcon mimeType={primary.mimeType} filename={primary.filename} className="h-5 w-5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-slate-800">{primary.filename || memo.title || primary.id}</p>
+              <p className="truncate text-xs text-slate-500">{formatBytes(primary.byteSize)} · {primary.mimeType || t("fileNote.unknownType")}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <IconTooltip label={t("fileNote.download")}>
+                <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                  <a href={toDesktopResourceDownloadUrl(primary.url, primary.filename || memo.title || "file")} download={primary.filename || undefined} aria-label={t("fileNote.download")}>
+                    <Download className="h-4 w-4" />
+                  </a>
+                </Button>
+              </IconTooltip>
+              {!readOnly ? (
+                <IconTooltip label={t("editor.resourceActions.rename")}>
+                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label={t("editor.resourceActions.rename")} onClick={() => {
+                    setRenameError(null);
+                    setRenameOpen(true);
+                  }}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </IconTooltip>
+              ) : null}
+              {!readOnly ? (
+                <>
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) void replaceFile(file);
+                    }}
+                  />
+                  <IconTooltip label={replacing ? t("fileNote.replacing") : t("fileNote.replace")}>
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" disabled={!primary.sha256 || replacing} aria-label={t("fileNote.replace")} onClick={() => inputRef.current?.click()}>
+                      {replacing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    </Button>
+                  </IconTooltip>
+                </>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        {replaceError ? <p className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-sm text-rose-700">{t("fileNote.replaceFailed")}</p> : null}
       </header>
 
-      <div className="flex min-h-0 flex-1 justify-center overflow-auto p-5 sm:p-8">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {resourcesQuery.isLoading ? (
-          <div className="flex items-center self-center gap-2 text-sm text-slate-500">
+          <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-500">
             <Loader2 className="h-4 w-4 animate-spin" />
             {t("fileNote.loading")}
           </div>
         ) : primary ? (
-          <div className="flex w-full max-w-6xl flex-col items-center gap-4">
-            <div className="w-full rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                    <AttachmentFileIcon mimeType={primary.mimeType} filename={primary.filename} className="h-8 w-8" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-sm font-semibold text-slate-950">{primary.filename || memo.title || primary.id}</h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {formatBytes(primary.byteSize)} · {primary.mimeType || t("fileNote.unknownType")}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild variant="solid" size="sm">
-                    <a href={toDesktopResourceDownloadUrl(primary.url, primary.filename || memo.title || "file")} download={primary.filename || undefined}>
-                      <Download className="h-4 w-4" />
-                      {t("fileNote.download")}
-                    </a>
-                  </Button>
-                  {!readOnly ? (
-                    <Button type="button" variant="outline" size="sm" onClick={() => {
-                      setRenameError(null);
-                      setRenameOpen(true);
-                    }}>
-                      <Pencil className="h-4 w-4" />
-                      {t("editor.resourceActions.rename")}
-                    </Button>
-                  ) : null}
-                  {!readOnly ? (
-                    <>
-                      <input
-                        ref={inputRef}
-                        type="file"
-                        className="sr-only"
-                        onChange={(event) => {
-                          const file = event.currentTarget.files?.[0];
-                          if (file) void replaceFile(file);
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!primary.sha256 || replacing}
-                        onClick={() => inputRef.current?.click()}
-                      >
-                        {replacing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                        {replacing ? t("fileNote.replacing") : t("fileNote.replace")}
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-              {previewer?.kind === "download" ? (
-                <p className="mt-3 border-t border-slate-100 pt-3 text-sm leading-6 text-slate-600">{t("fileNote.readOnlyDescription")}</p>
-              ) : null}
-              {replaceError ? <p className="mt-3 text-sm text-rose-600">{t("fileNote.replaceFailed")}</p> : null}
+          previewer?.kind === "download" ? (
+            <div className="flex h-full items-center justify-center p-6 text-center text-sm leading-6 text-slate-500">
+              {t("fileNote.readOnlyDescription")}
             </div>
-            <FileDocumentPreview resource={primary} />
-          </div>
+          ) : (
+            <FileDocumentPreview resource={primary} readResource={repository.readResource} />
+          )
         ) : (
-          <div className="max-w-md self-center rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-500">
             {t("fileNote.unavailable")}
           </div>
         )}
       </div>
+
       {primary ? (
         <FileDocumentRenameDialog
           open={renameOpen}
@@ -186,6 +363,7 @@ export const FileDocumentPane = ({
           onRename={renameFile}
         />
       ) : null}
+      <ShareMemoDialog memoId={memo.id} open={shareOpen} onOpenChange={setShareOpen} />
     </section>
   );
 };

@@ -1,6 +1,6 @@
 import { isPdfAttachment, resolveAttachmentKind, type Resource } from "@edgeever/shared";
 
-export type FileDocumentPreviewKind = "pdf" | "image" | "audio" | "video" | "docx" | "download";
+export type FileDocumentPreviewKind = "pdf" | "image" | "audio" | "video" | "docx" | "html" | "download";
 
 type Previewer = {
   kind: Exclude<FileDocumentPreviewKind, "download">;
@@ -29,6 +29,15 @@ export const FILE_DOCUMENT_PREVIEWERS: readonly Previewer[] = [
     kind: "docx",
     beta: true,
     matches: (resource) => resource.filename?.trim().toLowerCase().endsWith(".docx") === true,
+  },
+  {
+    kind: "html",
+    matches: (resource) => {
+      const filename = resource.filename?.trim().toLowerCase() ?? "";
+      return resource.mimeType?.toLowerCase() === "text/html"
+        || filename.endsWith(".html")
+        || filename.endsWith(".htm");
+    },
   },
 ] as const;
 
