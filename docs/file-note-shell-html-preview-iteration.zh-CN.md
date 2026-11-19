@@ -229,5 +229,6 @@ flowchart TB
 - 第二轮完整非 E2E 验证：批量测试 5907 项通过、0 失败；集成测试 41 项通过、1 项 Windows 专用测试在 macOS 跳过、0 失败。
 - 推送与部署：`main` 已推送；2026-11-19 12:55 CST 通过云效流水线 `#14` 部署提交 `0a12ec8c`，构建和部署均为 `SUCCESS`。
 - 部署后回读：`/api/health` 返回 `ok: true`，Migration 为 `0098`；本机 CLI 与 Claude Code Skill 均为 `0.8.2`。
-- 第二轮推送与部署：尚未执行。
+- 第二轮推送与部署：`main` 已推送；2026-11-19 16:47 CST 通过云效流水线 `#15` 部署提交 `3dad9018`，构建和部署均为 `SUCCESS`。
+- 第二轮部署后回读：`/api/health` 返回 `ok: true`，Migration 为 `0098`；本机 CLI 与 Claude Code Skill 均为 `0.8.2`，`.agents` Skill 软链接保持有效。
 - 未验证项：真实浏览器桌面/移动端人工交互、生产 HTML 文件预览操作、E2E 和生产数据内容回归。

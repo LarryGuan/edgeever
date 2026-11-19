@@ -229,5 +229,6 @@ This section records only outcomes that actually occurred; it does not represent
 - Second-pass complete non-E2E verification: 5,907 bulk tests passed and 0 failed; 41 integration tests passed, 1 Windows-only test was skipped on macOS, and 0 failed.
 - Push and deployment: `main` was pushed; Yunxiao pipeline `#14` deployed commit `0a12ec8c` at 2026-11-19 12:55 CST, with both build and deployment reporting `SUCCESS`.
 - Post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`.
-- Second-pass push and deployment: not performed.
+- Second-pass push and deployment: `main` was pushed; Yunxiao pipeline `#15` deployed commit `3dad9018` at 2026-11-19 16:47 CST, with both build and deployment reporting `SUCCESS`.
+- Second-pass post-deployment readback: `/api/health` returned `ok: true` with migration `0098`; the local CLI and Claude Code Skill both report `0.8.2`, and the `.agents` Skill symlink remains valid.
 - Unverified: manual desktop/mobile browser interaction, the production HTML-file preview flow, E2E, and production-data content regression.
