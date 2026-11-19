@@ -2,7 +2,7 @@
 
 ## Goal
 
-Complete the file-note experience added by the Larry fork without modifying the upstream editors for ordinary notes, mind maps, flowcharts, architecture diagrams, infographics, posters, or structured tables. File notes receive their own shell for memo metadata and file actions, previews use the full content area, static HTML gains a safe preview, and image notes created through the Upload file path retain the original uploaded filename and extension.
+Complete the file-note experience added by the Larry fork without modifying the upstream editors for ordinary notes, mind maps, flowcharts, architecture diagrams, infographics, posters, or structured tables. File notes receive their own shell for memo metadata and file actions, previews use the full content area, static HTML gains a safe preview, and image notes created through the Upload file path retain the original uploaded filename and extension. The second UI pass keeps one editable note title, demotes the source filename to read-only file information, and gives file notes the same left-aligned toolbar hierarchy as the official diagram editors.
 
 ## Verified Facts
 
@@ -12,6 +12,8 @@ Complete the file-note experience added by the Larry fork without modifying the 
 - PDF, image, audio, video, and DOCX Beta previews are already implemented, as are download, replacement, and rename.
 - Image compression currently converts PNG, JPEG, WebP, or AVIF to WebP when the result is smaller and changes the uploaded filename to `.webp`.
 - The server deliberately keeps HTML attachments as `Content-Disposition: attachment`; this iteration must not make HTML directly inline to enable preview.
+- The first file shell exposed both an editable memo title and a renameable resource filename; they update separate memo and resource records and can therefore diverge.
+- PDF reuses the complete `PdfViewer` designed for embedded ordinary-note attachments, so the file shell and the PDF toolbar repeat the same resource name.
 
 ## Confirmed Boundary
 
@@ -19,7 +21,10 @@ Complete the file-note experience added by the Larry fork without modifying the 
 
 - Add a file-note-specific header and compact file toolbar.
 - Allow memo title editing, notebook moves, tag editing, and access to existing share management.
-- Keep the memo title and primary filename independent.
+- Expose only the memo title as the user-editable name; retain the primary filename as read-only source-file information.
+- Use a left-aligned second-row file-type toolbar like the mind-map and flowchart editors: file information, download, replace, and relevant preview controls.
+- Hide duplicate PDF names and file operations in file-note mode while leaving embedded ordinary-note PDFs unchanged.
+- Keep best-effort DOCX preview without a Beta badge.
 - Remove the duplicate large file-information card and let the preview use all remaining body space.
 - Add constrained static HTML preview.
 - For images uploaded through the Larry fork Upload file or drop-to-create path, retain the original filename and extension in the list and image alternative text while still allowing WebP storage optimization.
@@ -27,46 +32,54 @@ Complete the file-note experience added by the Larry fork without modifying the 
 ### Not changed in this iteration
 
 - Do not modify `EditorPane`, `DiagramEditorPane`, `InfographicEditorPane`, `PosterEditorPane`, or `TableEditorPane`.
+- Image uploads that become ordinary image notes continue using the official `EditorPane` and ordinary-note toolbar rather than the file-note shell.
 - Do not create a global `NoteChrome` that all note types must adopt.
 - Do not change image paste, insert, or compression behavior inside the ordinary note editor.
 - Do not rewrite the displayed type of existing images; their lost original extension cannot be recovered reliably.
 - Do not add Office editing, D2 preview/editing, XLSX/PPTX preview, or an external document SDK.
 - Do not add automatic resume after a browser refresh or close. The existing upload dock and interrupted memo remain the v1 recovery boundary.
 - Do not turn public file-note shares into full online preview pages; reuse the existing share management and attachment access behavior only.
+- Do not remove resource `filename`, the resource rename API, or rename support in attachment management; remove rename only from the primary file-note UI.
 
 ## Relationship Overview
 
-This diagram answers how a file becomes a manageable file note and which existing capabilities its dedicated shell uses. Legend: solid lines carry core data or rendered results; dashed lines show tool use or management relationships. Node text records the state after this iteration.
+This diagram answers how one editable title and read-only source-file information reach the file-note page and which capabilities the toolbar manages. Legend: solid lines carry core data or rendered results; dashed lines show tool use or management relationships. Node text distinguishes the implemented first pass from the planned second pass.
 
 ```mermaid
 flowchart TB
     subgraph FLOW["File note data path"]
         INPUT["User selects or drops a file<br/>Implemented"]
         PREPARE["Upload preparation<br/>Images may be optimized to WebP<br/>Implemented"]
-        MEMO["Memo identity<br/>Title, notebook, tags<br/>Implemented"]
-        RESOURCE[("Primary resource<br/>Filename, MIME, bytes, hash<br/>Implemented")]
-        PANE["Dedicated file note shell<br/>Implemented in this iteration"]
+        MEMO["Memo identity<br/>Only editable title, notebook, tags<br/>Implemented"]
+        RESOURCE[("Read-only primary resource facts<br/>Source filename, MIME, bytes, hash<br/>Implemented")]
+        PANE["Common file-note header<br/>Second-pass refinement"]
+        TOOLBAR["Left-aligned file-type toolbar<br/>Second pass planned"]
         REGISTRY["Previewer registry<br/>HTML added in this iteration"]
-        RESULT["PDF / image / media / DOCX / HTML<br/>Full-body preview or safe download fallback"]
+        RESULT["PDF / media / DOCX / HTML<br/>Full-body preview or safe download fallback"]
 
         INPUT -->|"Original file and filename"| PREPARE
         PREPARE -->|"Memo metadata"| MEMO
         PREPARE -->|"Stored file"| RESOURCE
-        MEMO -->|"Title, notebook, tags"| PANE
-        RESOURCE -->|"Primary file metadata and read URL"| PANE
+        MEMO -->|"Only display title and organization metadata"| PANE
+        RESOURCE -->|"Read-only file information and read URL"| PANE
         PANE -->|"Resource to preview"| REGISTRY
         REGISTRY -->|"Matched render result"| RESULT
     end
 
     subgraph TOOLS["File note management entry points"]
-        ACTIONS["Download / rename / replace<br/>Implemented"]
+        ACTIONS["File information / download / replace<br/>Second pass planned"]
+        PREVIEW_ACTIONS["Zoom / fit / rotate / fullscreen, etc.<br/>Per preview type"]
         SHARE["Share management<br/>Reuse existing capability"]
         UPLOADS["Upload task dock<br/>Progress, cancel, open result<br/>Implemented"]
+        IMAGE_EDITOR["Image notes<br/>Keep official ordinary-note editor"]
     end
 
-    PANE -.->|"Manage primary file"| ACTIONS
+    PANE -.->|"Present"| TOOLBAR
+    TOOLBAR -.->|"Manage primary file"| ACTIONS
+    TOOLBAR -.->|"Control preview"| PREVIEW_ACTIONS
     PANE -.->|"Manage memo share"| SHARE
     UPLOADS -.->|"Open completed memo"| PANE
+    INPUT -.->|"Images keep the existing content path"| IMAGE_EDITOR
 ```
 
 ## Page and Interaction Design
@@ -82,19 +95,21 @@ The first row contains memo-level information:
 - Mobile back action.
 - Saving, failure, or read-only feedback when applicable.
 
-The second row is a compact file toolbar:
+The second row is a left-aligned file-type toolbar:
 
-- The left side displays the actual filename, type, and size.
-- The right side provides download, rename, and replace.
-- Best-effort previews such as DOCX retain a Beta marker.
+- Common actions are file information, download original, and replace file.
+- A read-only information dialog shows the source filename, type, size, update time, and hash.
+- PDF and similar types append zoom, fit-width, rotate, external-open, or fullscreen controls after a divider.
+- DOCX does not display a Beta marker.
 - Unsupported formats show a download explanation without a second large file card.
 
-### Independent name rules
+### Single editable name rules
 
 - Editing the top title updates only the memo title.
-- Renaming the file updates only the primary resource `filename`; the existing extension-preservation rule remains in force.
+- The primary resource `filename` is not editable from the file-note page; it remains a source-file fact.
 - Moving the notebook moves only the memo.
 - Editing tags updates only memo tags.
+- Replacing the file updates source filename, MIME type, size, and hash without automatically changing the memo title.
 - Replacement keeps the existing SHA-256 conflict guard; title changes must not bypass file conflict checks.
 
 ### Save and refresh behavior
@@ -111,7 +126,7 @@ The second row is a compact file toolbar:
 - Add a file-note-specific preview layout mode so ordinary-note embedded attachment sizes remain unchanged.
 - PDF and DOCX scroll inside the body; images and video use `object-contain` and never stretch.
 - Audio retains a compact player while its body area still fills the remaining page.
-- PDF keeps preview-specific controls such as pages, zoom, rotation, and fullscreen; generic filename and file actions appear only in the file toolbar.
+- PDF zoom, fit-width, rotation, external-open, and fullscreen controls live in the second row; PDF no longer repeats filename, type, download, or collapse inside the preview.
 - Preview failure or an unsupported type always retains download access.
 
 ## Safe HTML Preview
@@ -149,18 +164,29 @@ The second row is a compact file toolbar:
 6. Register and implement the safe static HTML preview.
 7. Run focused tests, type checks, and the Web build; do not push or deploy before verification.
 
+### Second-pass UI refinement
+
+1. Update this plan and relationship diagram and commit a pre-development checkpoint.
+2. Remove resource rename from the file-note UI and add a read-only file-information dialog.
+3. Move file actions into a left-aligned toolbar and share its container across non-PDF preview types.
+4. Add a default-compatible file-note mode to `PdfViewer`, reusing its controls while hiding duplicate names and operations.
+5. Remove the DOCX Beta marker while leaving image notes and embedded ordinary-note attachments unchanged.
+6. Run focused tests, Web and mobile type checks, and the Web build; do not push or deploy before verification.
+
 ## Acceptance
 
 ### File shell
 
 - A file note can edit its title, notebook, and tags and can open existing share management.
-- Memo title and filename stay independent.
-- Download, rename, and replace continue to work; replacement retains hash-conflict protection.
+- The page exposes one editable memo title; the source filename appears only as read-only file information.
+- Download and replace continue to work; file notes no longer expose rename, and replacement retains hash-conflict protection.
 - Desktop and mobile headers do not overflow, and upstream note editors have no code changes.
 
 ### Preview
 
-- PDF, image, audio, video, and DOCX use the file note body instead of an outer small-window width.
+- PDF, audio, video, and DOCX use the file note body instead of an outer small-window width.
+- PDF no longer repeats the resource name, type, or download action; embedded ordinary-note PDFs remain unchanged.
+- DOCX does not display a Beta badge.
 - Embedded attachment sizes in ordinary notes remain unchanged.
 - Scripts, forms, popups, top navigation, and external network access do not work in HTML preview; static content and inline styles remain readable.
 - Files over 5 MiB, non-UTF-8 content, parse failures, and unsupported types remain downloadable.
@@ -171,6 +197,7 @@ The second row is a compact file toolbar:
 - Existing upload progress, cancellation, workspace navigation, open-on-completion, and interrupted-upload explanation continue to work.
 - Refresh does not promise automatic resume, but it must not reintroduce a title-only blank memo.
 - Attachment management continues to show the correct source memo title.
+- Image notes continue using the official ordinary-note header and editor toolbar.
 
 ### Engineering verification
 
