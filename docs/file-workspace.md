@@ -1,6 +1,6 @@
 # CLI Markdown file workspace (notes and attachments)
 
-## Current workflow: CLI 0.8.2
+## Current workflow: CLI 0.9.0
 
 See the [EdgeEver CLI and Skill User Guide](edgeever-cli-skill-guide.md) for first-time setup, multiple tokens, and agent-skill usage. This document focuses on file-workspace storage, synchronization, conflicts, and recovery.
 
@@ -13,6 +13,12 @@ edgeever sync --auto-merge --json
 ```
 
 The CLI discovers the nearest workspace upward and selects the unique authenticated profile whose server URL matches its index. Ambiguous/missing profiles require an explicit --profile or local configuration. Environment overrides still apply and workspace identity is checked. Human output summarizes the single run; --json includes counts and issues. Untracked files are reported, never automatically inspected/imported. Auto-merge is opt-in; ordinary sync still uploads local edits and downloads remote changes. No background watcher is added.
+
+### 0.9: tree bootstrap, diagnostics, adoption, and explicit trash
+
+`workspace bootstrap` previews an explicitly selected Markdown tree and writes only with `--run`: it creates/reuses notebook paths, imports notes, writes real memo IDs, and lets ordinary sync finish attachment uploads. Same-title notes are candidates only; `--mapping` explicitly selects bind/create/skip. `workspace doctor` is read-only. `workspace adopt` reconstructs state from IDs committed in a Git working copy and creates conflicts for divergent bodies.
+
+Deleting an untracked local file needs no action. A missing tracked file remains missing-local: restore it with `resolve --use remote`, or use `workspace trash --memo ID --run` to move the cloud memo to recoverable trash. A remote newer than the saved baseline blocks ordinary execution; only explicit `--force` proceeds. The CLI does not expose permanent deletion. See the [MySystem workspace plan](my-system-workspace-v1-plan.md).
 
 ### Upgrade once: reference-only state v4
 
@@ -77,7 +83,7 @@ bun scripts/edgeever.mjs workspace sync ./notes --dry-run
 bun scripts/edgeever.mjs workspace sync ./notes
 ```
 
-Use --all for the entire workspace; --shallow disables recursive inclusion. Exclusions always include descendants and win over inclusions. Relink with --replace-scope to change selection while retaining files and baselines. --pull-only never uploads local edits. Readable filenames use numbered suffixes on collision; note identity lives in YAML front matter. Existing paths remain stable after remote renames; local renaming does not rename a remote note. Status works offline without credentials. Server URL and workspace identity must match.
+Use --all for the entire workspace; --shallow disables recursive inclusion. Exclusions always include descendants and win over inclusions. Relink with --replace-scope to change selection while retaining files and baselines. --pull-only never uploads local edits. Readable filenames use numbered suffixes on collision; note identity lives in YAML front matter. Existing paths remain stable after remote renames; local renaming does not rename a remote note. Status works offline without credentials; add `--remote` when it should also distinguish remotely trashed notes. Server URL and workspace identity must match.
 
 ## Conflicts and recovery
 

@@ -6,6 +6,10 @@ import { manageSkills, packageVersion } from "./skills.mjs";
 import { interactiveResolve, editDraft } from "./file-workspace/interactive.mjs";
 import { resourceTransport } from "./file-workspace/http.mjs";
 import { link as linkWorkspace, status as workspaceStatus, sync as syncWorkspace, bindDirectory, gcWorkspace, resolveConflict, conflicts, uploads, retryUpload, migrate, importFile } from "./file-workspace/core.mjs";
+import { bootstrapWorkspace } from "./file-workspace/bootstrap.mjs";
+import { doctorWorkspace } from "./file-workspace/doctor.mjs";
+import { adoptWorkspace } from "./file-workspace/adopt.mjs";
+import { trashMemo } from "./file-workspace/trash.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -49,13 +53,17 @@ File workspace (server must support /api/v1/file-workspace):
   edgeever workspace bind <directory> --notebook <id> --path <relative-directory> [--dry-run]
   edgeever workspace gc <directory> [--dry-run] [--days <30>] [--keep <5>] [--max-bytes <budget>]
   edgeever workspace import <directory> --file <path> --notebook <id> [--title <title>] [--memo <confirmed-id>] [--bind-directory]
+  edgeever workspace bootstrap <directory> --include dir1,dir2 [--mapping <json>] [--run]
+  edgeever workspace doctor <directory> [--json]
+  edgeever workspace adopt <directory> [--run]
+  edgeever workspace trash <directory> --memo <id> [--run] [--force]
   edgeever workspace uploads <directory>
   edgeever workspace retry-upload <directory> --key <key>
   edgeever workspace resolve <directory> --memo <id> --use local|remote|merge
   edgeever workspace resolve <directory> --memo <id> --continue
   edgeever workspace resolve <directory> --memo <id> --interactive [--editor <executable>]
   edgeever workspace conflicts <directory>
-  edgeever workspace status <directory>
+  edgeever workspace status <directory> [--remote]
   edgeever workspace sync <directory> [--dry-run] [--pull-only] [--auto-merge]
 
 Env fallback:
@@ -83,9 +91,7 @@ const main = async () => {
 
   if (command === "workspace" && argv[0] === "conflicts") return printJson(await conflicts(argv[1] || "."));
   if (command === "workspace" && argv[0] === "uploads") return printJson(await uploads(argv[1] || "."));
-  if (command === "workspace" && argv[0] === "status") {
-    return printJson(await workspaceStatus(argv[1] || "."));
-  }
+  if (command === "workspace" && argv[0] === "status" && !argv.includes("--remote")) return printJson(await workspaceStatus(argv[1] || "."));
   if (command === "sync") {
     const options=parseOptions(argv);
     const context=await discoverWorkspace(argv[0]&&!argv[0].startsWith('--')?argv[0]:'.');
@@ -110,7 +116,7 @@ const main = async () => {
     return printJson(await gcWorkspace(argv[1]||'.',opts));
   }
   let profile=globalOptions.profile;
-  if(!profile&&!process.env.EDGEEVER_TOKEN&&command==='workspace'&&['sync','bind','migrate','resolve','import'].includes(argv[0])&&argv[1]) {
+  if(!profile&&!process.env.EDGEEVER_TOKEN&&command==='workspace'&&['sync','bind','migrate','resolve','import','status','doctor','trash'].includes(argv[0])&&argv[1]) {
     const context=await discoverWorkspace(argv[1]);profile=matchingProfile(await readConfig(),context.url);
   }
   const client = await createClient(profile);
@@ -125,6 +131,28 @@ const main = async () => {
         exclude: (options.exclude || "").split(",").filter(Boolean),
         recursive: options.shallow !== "true",
       }, options["replace-scope"] === "true", options.at !== undefined ? options.at : (options.notebooks && !options.notebooks.includes(",") && options["replace-scope"] !== "true" ? "." : undefined)));
+    }
+    if (action === "status") return printJson(await workspaceStatus(directory, client));
+    if (action === "doctor") {
+      const result = await doctorWorkspace(directory, client); printJson(result);
+      if (!result.ok) process.exitCode = 2;
+      return;
+    }
+    if (action === "adopt") {
+      const result = await adoptWorkspace(directory, client, { run: options.run === "true" }); printJson(result);
+      if (result.status === 'blocked' || result.conflicts) process.exitCode = 2;
+      return;
+    }
+    if (action === "trash") {
+      const result = await trashMemo(directory, client, requireValue(options.memo, "--memo"), { run: options.run === "true", force: options.force === "true" }); printJson(result);
+      if (["remote-changed","remote-missing"].includes(result.status)) process.exitCode = 2;
+      return;
+    }
+    if (action === "bootstrap") {
+      const include = (options.include || "").split(",").map(value => value.trim()).filter(Boolean);
+      const result = await bootstrapWorkspace(directory, client, { include, mappingPath: options.mapping, run: options.run === "true", journalDirectory: join(dirname(CONFIG_PATH), "notebook-operations") }); printJson(result);
+      if (result.status === "partial" || result.issues?.length) process.exitCode = 2;
+      return;
     }
     if (action === "bind") return printJson(await bindDirectory(directory, client, requireValue(options.notebook,"--notebook"), requireValue(options.path,"--path"), {dryRun:options["dry-run"]==="true"}));
     if (action === "migrate") return printJson(await migrate(directory, client, { dryRun: options["dry-run"] === "true" }));
@@ -146,7 +174,7 @@ const main = async () => {
       if (result.results.some(item => ["unresolved-markers", "conflict", "diagram-read-only", "file-note-unsupported", "path-occupied", "local-changed-during-sync", "missing-local", "attachment-error", "duplicate-id", "unbound-id", "identity-mismatch", "metadata-error"].includes(item.status))) process.exitCode = 2;
       return;
     }
-    throw new Error("Unknown workspace command: use link, status, sync, migrate, import, resolve, uploads or retry-upload");
+    throw new Error("Unknown workspace command: use link, status, sync, migrate, import, bootstrap, doctor, adopt, trash, resolve, uploads or retry-upload");
   }
 
   switch (command) {

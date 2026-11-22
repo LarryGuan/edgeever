@@ -69,7 +69,7 @@ async function requireCurrent(root, state, allowPendingMove = false) {
   if (!allowPendingMove && await read(root, moveJournal)) throw Error("Pending move: run workspace sync to resume first");
   if (state.version !== 4 || await read(root, '.edgeever/migration-v3.json')) throw Error('Run workspace migrate first (use --dry-run to preview); old files and baselines will be backed up.');
 }
-async function localStatus(root, state) {
+async function localStatus(root, state, client) {
   if (await read(root, moveJournal)) return [{ status: 'move-recovery-required', next: 'workspace sync' }];
   if (state.version !== 4 || await read(root, '.edgeever/migration-v3.json')) return [{ status: 'migration-required', version: state.version }];
   const scan = await scanNotes(root, state);
@@ -89,9 +89,22 @@ async function localStatus(root, state) {
     if (state.conflicts?.[id]) name = 'conflict';
     results.push({ id, path: note.path, status: name, ...(note.path !== entry.path ? { previousPath: entry.path } : {}) });
   }
+  if (client) {
+    await identity(client, state);
+    for (const [id, entry] of Object.entries(state.entries)) {
+      let memo;
+      try { ({ memo } = await client.request(`/api/v1/memos/${encodeURIComponent(id)}?includeDeleted=1`)); }
+      catch (error) { if (error.status === 404) continue; throw error; }
+      if (memo?.isDeleted) {
+        const current = results.find(result => result.id === id);
+        if (current) Object.assign(current, { status: 'remote-trashed', path: current.path || entry.path, next: 'Restore the cloud memo, or use workspace trash to retire the local binding' });
+        else results.push({ id, path: entry.path, status: 'remote-trashed', next: 'Restore the cloud memo, or use workspace trash to retire the local binding' });
+      }
+    }
+  }
   return results;
 }
-export const status = async root => localStatus(root, await load(root));
+export const status = async (root, client) => localStatus(root, await load(root), client);
 
 export async function migrate(root, client, options = {}) {
   return locked(root, async () => {
@@ -160,7 +173,14 @@ export async function sync(root, client, { dryRun = false, pullOnly = false, aut
     const results = [...scan.problems];
     const reserved = new Set();
     // Out-of-scope and remote-deleted notes are retained, never uploaded or deleted.
-    for (const [id, entry] of Object.entries(state.entries)) if (!remote.has(id)) results.push({ id, path: entry.path, status: 'outside-snapshot-retained' });
+    for (const [id, entry] of Object.entries(state.entries)) if (!remote.has(id)) {
+      let status = 'outside-snapshot-retained';
+      try {
+        const { memo } = await client.request(`/api/v1/memos/${encodeURIComponent(id)}?includeDeleted=1`);
+        if (memo?.isDeleted) status = 'remote-trashed';
+      } catch (error) { if (error.status !== 404) throw error; }
+      results.push({ id, path: entry.path, status });
+    }
     for (const id of remote.keys()) {
       if (scan.blocked.has(id)) continue;
       const summary = remote.get(id);
@@ -436,7 +456,10 @@ export async function importFile(root, client, { file, notebookId, title, memoId
       if(Object.entries(state.directoryBindings||{}).some(([id,p])=>id!==notebookId&&p.toLowerCase()===directory.toLowerCase())) throw Error('Import directory bound to another notebook');
     }
     const plan = await attachmentContext(root, client, state, async () => {}, true).prepare(raw, path, 'import');
-    if (plan.pending) throw Error('Import does not upload new local attachments. Import the text first, then add attachments and sync.');
+    // A newly created memo has no resource owner yet. Store the relative-link
+    // Markdown first, bind its real ID, then let the normal guarded sync upload
+    // attachments and replace only the server-side links.
+    const createContent = plan.pending ? raw : plan.content;
     if (receipt && receipt.hash !== hash(raw)) throw Error('Import source changed after a create attempt; restore the original file before reconciling');
     if (memoId && receipt?.memoId && receipt.memoId !== memoId) throw Error('Specified memo does not match the saved create receipt');
     if (receipt?.notebookId && receipt.notebookId !== notebookId) throw Error('Import notebook does not match the saved intent');
@@ -448,7 +471,7 @@ export async function importFile(root, client, { file, notebookId, title, memoId
       receipt = { path, hash: hash(raw), notebookId, title: title || posix.basename(path, posix.extname(path)), status: 'creating' };
       state.imports[key] = receipt; await save(root, state);
       try {
-        memo = (await client.request('/api/v1/memos', { method: 'POST', body: { notebookId, title: receipt.title, contentMarkdown: plan.content } })).memo;
+        memo = (await client.request('/api/v1/memos', { method: 'POST', body: { notebookId, title: receipt.title, contentMarkdown: createContent } })).memo;
       } catch (error) {
         // Definitive validation/auth rejection cannot have created a note.
         if ([400,401,403,404,413,415,422,429].includes(error.status)) { delete state.imports[key]; await save(root, state); }
@@ -464,7 +487,7 @@ export async function importFile(root, client, { file, notebookId, title, memoId
       state.layoutInvalidated=[...(state.layoutInvalidated||[]),notebookId];
     }
 
-    if (await normalizeRemote(memo.contentMarkdown, client.baseUrl) !== plan.content) throw Error(`Memo ${memo.id} content differs from the import source; preserved both copies`);
+    if (await normalizeRemote(memo.contentMarkdown, client.baseUrl) !== await normalizeRemote(createContent, client.baseUrl)) throw Error(`Memo ${memo.id} content differs from the import source; preserved both copies`);
     const scan = await scanNotes(root, state);
     if (scan.ids.get(memo.id)?.some(note => note.path !== path)) throw Error('Memo ID already appears in a local file');
     // Save the binding intent before touching the file, enabling interrupted-import recovery.
@@ -473,7 +496,7 @@ export async function importFile(root, client, { file, notebookId, title, memoId
     if (!await installFile(root, path, encodeNote(raw, memo.id), diskRaw, memo.id)) throw Error(`Import source changed; remote memo ${memo.id} retained for reconciliation`);
     state.entries[memo.id] = { localPathOverride: true, path, notebookId, revision: memo.revision, base: raw, hash: hash(raw), serverBase: memo.contentMarkdown, serverHash: hash(memo.contentMarkdown) };
     state.imports[key].status = 'bound'; await save(root, state);
-    return { id: memo.id, path, status: 'imported' };
+    return { id: memo.id, path, status: 'imported', pendingAttachments: plan.pending };
   });
 }
 

@@ -2,7 +2,7 @@
 
 [English](edgeever-cli-skill-guide.md)
 
-本手册面向使用 CLI 或让 AI Agent 操作 EdgeEver 的用户。当前适配 EdgeEver 服务端 `2.28.2`、CLI `0.8.2` 和文件工作区协议 `1`。完整命令及实现细节见 [CLI README](../cli/README.zh-CN.md)，文件工作区的存储和恢复细节见[文件工作区说明](file-workspace.zh-CN.md)。
+本手册面向使用 CLI 或让 AI Agent 操作 EdgeEver 的用户。当前适配 EdgeEver 服务端 `2.28.2`、CLI `0.9.0` 和文件工作区协议 `1`。完整命令及实现细节见 [CLI README](../cli/README.zh-CN.md)，文件工作区的存储和恢复细节见[文件工作区说明](file-workspace.zh-CN.md)。
 
 ## 1. CLI、Skill、Profile 和 Token 的关系
 
@@ -179,7 +179,32 @@ edgeever --profile project workspace import "$HOME/EdgeEver/project" \
 
 退出码 `0` 表示命令完成，`1` 表示错误，`2` 表示已报告冲突或需要处理的状态。不要删除 `.edgeever/state.json`、基线或恢复日志来绕过错误。
 
-## 7. 安装和使用 Agent Skill
+## 7. 整树接入、恢复和删除
+
+首次把既有目录树接入云端时，先执行 `bootstrap` 检查模式。只有审核过数量、同名候选和排除项后才加 `--run`：
+
+```sh
+edgeever --profile work workspace bootstrap "$HOME/my-system" --include 00_system,10_mind,20_info,30_daily,40_work,50_project,60_topic,70_publish
+edgeever --profile work workspace bootstrap "$HOME/my-system" --include 00_system,10_mind,20_info,30_daily,40_work,50_project,60_topic,70_publish --run
+edgeever --profile work workspace doctor "$HOME/my-system"
+```
+
+Git 新克隆或 `.edgeever` 状态丢失时，用 `adopt` 从文件内的真实 ID 重建本地状态。默认只预览；正文不一致会形成冲突，不会任选一方覆盖：
+
+```sh
+edgeever --profile work workspace adopt "$HOME/my-system"
+edgeever --profile work workspace adopt "$HOME/my-system" --run
+```
+
+本地缺失的已绑定文件不会自动删除云端笔记。恢复本地时用 `resolve --use remote`；确实要删除云端版本时，先预览 `trash`，再明确执行。云端比基线更新时必须再次明确 `--force`。这些命令只进入可恢复的回收站，不提供永久删除：
+
+```sh
+edgeever --profile work workspace resolve "$HOME/my-system" --memo MEMO_ID --use remote
+edgeever --profile work workspace trash "$HOME/my-system" --memo MEMO_ID
+edgeever --profile work workspace trash "$HOME/my-system" --memo MEMO_ID --run
+```
+
+## 8. 安装和使用 Agent Skill
 
 Skill 随 CLI 同版本分发，安装或更新 Skill 不会读取 Token，也不会连接服务器：
 
@@ -220,7 +245,7 @@ edgeever skill update --target claude
 
 Agent 实际调用 CLI；Skill 只约束 Profile 选择、读写前检查、冲突处理和凭据安全。
 
-## 8. 常见问题
+## 9. 常见问题
 
 | 现象 | 处理 |
 | --- | --- |

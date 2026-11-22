@@ -5,10 +5,13 @@ import { decodeNote } from './metadata.mjs';
 
 export async function scanNotes(root, state) {
   const files = new Map(), ids = new Map(), problems = [];
+  const ignored = state.ignorePaths || [];
+  const isIgnored = path => ignored.some(value => path === value || path.startsWith(`${value}/`));
   async function walk(dir = '') {
     for (const item of await readdir(await safePath(root, dir), { withFileTypes: true })) {
       if (item.name === '.edgeever') continue;
       const path = posix.join(dir, item.name);
+      if (isIgnored(path)) continue;
       if (item.isSymbolicLink()) throw Error(`Symlink is not allowed: ${path}`);
       if (item.isDirectory()) await walk(path);
       else if (/\.md$/i.test(path)) {

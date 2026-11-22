@@ -1,6 +1,6 @@
 # CLI 本地 Markdown 工作目录（正文与附件）
 
-## 当前流程：CLI 0.8.2
+## 当前流程：CLI 0.9.0
 
 首次配置、多 Token 和 Agent Skill 用法见[《EdgeEver CLI 与 Skill 使用手册》](edgeever-cli-skill-guide.zh-CN.md)。本文聚焦文件工作区的存储、同步、冲突与恢复细节。
 
@@ -13,6 +13,12 @@ edgeever sync --auto-merge --json
 ```
 
 CLI 向上寻找最近的 workspace，按索引里的服务器地址匹配唯一的已认证 profile。存在歧义或没有匹配项时，需显式 --profile 或本机配置。环境变量仍有覆盖作用，实例身份仍会校验。人类输出是单次运行的摘要，--json 含计数和异常。未跟踪文件只提示，不自动读取/导入。自动合并需 --auto-merge 显式启用；普通 sync 仍会上传本地修改、下载远端变化。本版没有后台监听。
+
+### 0.9：批量接入、质检、恢复与显式删除
+
+`workspace bootstrap` 默认只预览指定的 Markdown 目录树，`--run` 才创建/复用笔记本、导入笔记、写入真实 memo ID，并通过普通 sync 完成附件上传。同名笔记只作为候选；`--mapping` 显式选择 bind/create/skip。`workspace doctor` 只读检查本地与远端状态。`workspace adopt` 从 Git 工作副本内的 memo ID 恢复状态，正文不一致时建立冲突。
+
+本地未绑定文件删除后无需处理。已绑定文件缺失时仍报告 missing-local：用 `resolve --use remote` 恢复，或用 `workspace trash --memo ID --run` 将云端笔记移入回收站。远端晚于本地基线时普通执行停止，只有追加 `--force` 才继续。CLI 不提供永久删除。详见[MySystem 工作区方案](my-system-workspace-v1-plan.zh-CN.md)。
 
 ### 一次性升级：只存引用的 v4 状态
 
@@ -72,6 +78,7 @@ bun scripts/edgeever.mjs notebooks
 bun scripts/edgeever.mjs workspace link ./资料 --notebooks nb_a,nb_b --exclude nb_private
 bun scripts/edgeever.mjs workspace sync ./资料
 bun scripts/edgeever.mjs workspace status ./资料
+bun scripts/edgeever.mjs workspace status ./资料 --remote
 # 用 AI / 编辑器修改已有 .md 正文后：
 bun scripts/edgeever.mjs workspace sync ./资料 --dry-run
 bun scripts/edgeever.mjs workspace sync ./资料
@@ -82,7 +89,7 @@ bun scripts/edgeever.mjs workspace sync ./资料
 - 调整范围：重新 link 并带 `--replace-scope`，保留已有文件和基线。
 - 只拉取：`workspace sync ./资料 --pull-only`，保留本地未提交修改。
 - 目录与文件使用可读名称，重名时追加序号；笔记 ID 写入 YAML front matter。笔记改名后已有路径保持稳定；本地改文件名不表示远端改名。
-- `status` 无需认证与网络；其他命令使用配置的实例和账号。禁止跨实例/工作区复用同一目录。
+- `status` 默认无需认证与网络；需要同时识别云端回收站状态时加 `--remote`。其他命令使用配置的实例和账号。禁止跨实例/工作区复用同一目录。
 
 ## 冲突与恢复
 

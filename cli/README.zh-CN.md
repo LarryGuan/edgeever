@@ -1,6 +1,6 @@
 # 知识工作台 EdgeEver CLI
 
-## 当前流程：CLI 0.8.2
+## 当前流程：CLI 0.9.0
 
 第一次配置、多 Token、单篇笔记操作和 Skill 使用请先看[《EdgeEver CLI 与 Skill 使用手册》](../docs/edgeever-cli-skill-guide.zh-CN.md)。本 README 保留完整命令、升级和实现说明。
 
@@ -13,6 +13,21 @@ edgeever sync --auto-merge --json
 ```
 
 CLI 向上寻找最近的 workspace，按索引里的服务器地址匹配唯一的已认证 profile。存在歧义或没有匹配项时，需显式 --profile 或本机配置。环境变量仍有覆盖作用，实例身份仍会校验。人类输出是单次运行的摘要，--json 含计数和异常。未跟踪文件只提示，不自动读取/导入。自动合并需 --auto-merge 显式启用；普通 sync 仍会上传本地修改、下载远端变化。本版没有后台监听。
+
+### 批量接入、质检、恢复和回收站
+
+```bash
+# 默认预览；增加 --run 才执行首次目录接入
+edgeever --profile cloud workspace bootstrap ./my-system --include 00_system,10_mind,20_info
+edgeever --profile cloud workspace bootstrap ./my-system --include 00_system,10_mind,20_info --run
+edgeever --profile cloud workspace doctor ./my-system
+# Git 新克隆或状态丢失：默认预览，增加 --run 重建状态
+edgeever --profile cloud workspace adopt ./my-system
+# 默认预览；云端晚于本地基线时还需 --force
+edgeever --profile cloud workspace trash ./my-system --memo MEMO_ID --run
+```
+
+bootstrap 只处理明确 include 的 Markdown 树，不删除、移动或按同名标题自动绑定已有云端笔记；`--mapping` 可显式选择 bind/create/skip。doctor 只读检查本地和云端身份、版本、路径、附件及不支持项。adopt 从 Markdown 内的真实 memo ID 恢复工作区，不一致的正文进入冲突流程。未绑定文件可以直接本地删除；已绑定文件缺失仍报告 missing-local，可用 `resolve --use remote` 恢复，或用 trash 明确将云端笔记移入现有回收站。CLI 不提供永久删除。完整方案见[MySystem 工作区方案](../docs/my-system-workspace-v1-plan.zh-CN.md)。
 
 ### 一次性升级：只存引用的 v4 状态
 
@@ -65,7 +80,7 @@ GC 不扫描或删除用户笔记目录和附件仓库。空间预算针对受�
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.8.2.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.9.0.tgz
 edgeever --help
 ```
 
@@ -82,6 +97,7 @@ edgeever --profile cloud update memo_id --body-file ./note.md
 edgeever --profile cloud workspace link ./资料 --notebooks nb_id
 edgeever --profile cloud workspace sync ./资料 --pull-only
 edgeever workspace status ./资料
+edgeever --profile cloud workspace status ./资料 --remote
 # 修改文件后，先预览再上传：
 edgeever --profile cloud workspace sync ./资料 --dry-run
 edgeever --profile cloud workspace sync ./资料
@@ -91,7 +107,7 @@ edgeever --profile cloud workspace sync ./资料
 
 基础命令使用已有 REST API。工作目录同步要求服务端提供我们新增的 `/api/v1/file-workspace` 能力、原子版本写入和附件同步；不能默认官方镜像具备这些能力。同步权限：`read:notebooks`、`read:memos`、`write:memos`、`read:resources`、`write:resources`。
 
-不同实例/工作区使用不同本地目录。新 Markdown 文件需要显式 workspace import，删除不会传播，同步需手动触发。退出码：0 成功，1 错误，2 已报告同步冲突。全部命令见 `edgeever --help`。
+不同实例/工作区使用不同本地目录。普通新 Markdown 文件需要显式 workspace import；首次整树接入使用默认预览的 workspace bootstrap。删除未绑定文件没有云端影响，已绑定笔记只能通过显式 workspace trash 进入回收站。同步需手动触发。退出码：0 成功，1 错误，2 已报告待处理事项。全部命令见 `edgeever --help`。
 
 ## 开发与验证
 

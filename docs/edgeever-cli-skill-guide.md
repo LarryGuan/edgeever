@@ -2,7 +2,7 @@
 
 [简体中文](edgeever-cli-skill-guide.zh-CN.md)
 
-This guide is for people who use the CLI directly or ask an AI agent to operate EdgeEver. It targets EdgeEver server `2.28.2`, CLI `0.8.2`, and file-workspace protocol `1`. See the [CLI README](../cli/README.md) for the complete command and implementation reference, and the [file-workspace documentation](file-workspace.md) for storage and recovery details.
+This guide is for people who use the CLI directly or ask an AI agent to operate EdgeEver. It targets EdgeEver server `2.28.2`, CLI `0.9.0`, and file-workspace protocol `1`. See the [CLI README](../cli/README.md) for the complete command and implementation reference, and the [file-workspace documentation](file-workspace.md) for storage and recovery details.
 
 ## 1. How the CLI, skill, profiles, and tokens relate
 
@@ -179,7 +179,32 @@ edgeever --profile project workspace import "$HOME/EdgeEver/project" \
 
 Exit code `0` means the command completed, `1` is an error, and `2` reports conflicts or another state that needs attention. Never delete `.edgeever/state.json`, baselines, or recovery journals to bypass an error.
 
-## 7. Install and use the agent skill
+## 7. Bootstrap, recover, and delete a tree
+
+When importing an existing directory tree for the first time, run `bootstrap` in preview mode. Add `--run` only after reviewing counts, same-title candidates, and exclusions:
+
+```sh
+edgeever --profile work workspace bootstrap "$HOME/my-system" --include 00_system,10_mind,20_info,30_daily,40_work,50_project,60_topic,70_publish
+edgeever --profile work workspace bootstrap "$HOME/my-system" --include 00_system,10_mind,20_info,30_daily,40_work,50_project,60_topic,70_publish --run
+edgeever --profile work workspace doctor "$HOME/my-system"
+```
+
+For a fresh Git clone or lost `.edgeever` state, use `adopt` to reconstruct local state from real embedded IDs. It previews by default; divergent bodies become conflicts without choosing either side:
+
+```sh
+edgeever --profile work workspace adopt "$HOME/my-system"
+edgeever --profile work workspace adopt "$HOME/my-system" --run
+```
+
+Deleting a tracked local file never deletes its cloud memo automatically. Use `resolve --use remote` to restore the local copy. If cloud deletion is intended, preview `trash` and then execute it explicitly. A cloud version newer than the baseline requires the additional `--force` decision. The CLI only uses recoverable trash and exposes no permanent delete:
+
+```sh
+edgeever --profile work workspace resolve "$HOME/my-system" --memo MEMO_ID --use remote
+edgeever --profile work workspace trash "$HOME/my-system" --memo MEMO_ID
+edgeever --profile work workspace trash "$HOME/my-system" --memo MEMO_ID --run
+```
+
+## 8. Install and use the agent skill
 
 The skill ships at the same version as the CLI. Installing or updating it neither reads tokens nor contacts the server:
 
@@ -220,7 +245,7 @@ Use the EdgeEver skill with the project profile to dry-run synchronization for t
 
 The agent runs the CLI. The skill only governs profile selection, read-before-write behavior, conflict handling, and credential safety.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Action |
 | --- | --- |

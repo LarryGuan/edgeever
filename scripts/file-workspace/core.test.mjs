@@ -11,6 +11,10 @@ import { updateMemoRecord, getMemoDetail } from '../../apps/api/src/memo-service
 import { resourceTransport } from './http.mjs';
 import { markdownUrls } from './attachments.mjs';
 import { link, sync, status, selectNotebooks, hash, resolveConflict, retryUpload, uploads, migrate, importFile, conflicts } from './core.mjs';
+import { bootstrapWorkspace } from '../../cli/src/file-workspace/bootstrap.mjs';
+import { doctorWorkspace } from '../../cli/src/file-workspace/doctor.mjs';
+import { adoptWorkspace } from '../../cli/src/file-workspace/adopt.mjs';
+import { trashMemo } from '../../cli/src/file-workspace/trash.mjs';
 
 import { decodeNote, encodeNote } from '../../cli/src/file-workspace/metadata.mjs';
 // Existing behavior tests operate on the body; raw metadata is asserted separately below.
@@ -114,6 +118,112 @@ test('missing local file never deletes remote; scope removal preserves local edi
   await link(root,client,{ ...scope, include:['nb_other'] },true);
   expect((await sync(root,client)).results[0].status).toBe('outside-snapshot-retained');
   expect(await readFile(join(root,entry.path),'utf8')).toBe('保留');
+});
+
+test('workspace trash previews, guards a newer remote and preserves a local recovery copy', async () => {
+  const memo = await create(); await link(root,client,scope); await sync(root,client);
+  const entry = (await state()).entries[memo.id];
+  await editRemote(memo,'newer remote');
+  expect((await trashMemo(root,client,memo.id)).status).toBe('remote-changed');
+  expect((await trashMemo(root,client,memo.id,{run:true})).status).toBe('remote-changed');
+  const result = await trashMemo(root,client,memo.id,{run:true,force:true});
+  expect(result.status).toBe('trashed');
+  expect((await client.request(`/api/v1/memos/${memo.id}?includeDeleted=1`)).memo.isDeleted).toBe(true);
+  expect(await rawReadFile(join(root,result.history,'note.md'),'utf8')).toContain('原文');
+  expect((await state()).entries[memo.id]).toBeUndefined();
+  expect(await rawReadFile(join(root,entry.path),'utf8').catch(error=>error.code)).toBe('ENOENT');
+});
+
+test('workspace trash refuses missing write scope without changing local state', async () => {
+  const memo = await create(); await link(root,client,scope); await sync(root,client);
+  const entry = (await state()).entries[memo.id];
+  sqlite.run("UPDATE api_tokens SET scopes_json=? WHERE id='tok_test'",[JSON.stringify(['read:memos','read:notebooks'])]);
+  await expect(trashMemo(root,client,memo.id,{run:true})).rejects.toMatchObject({status:403});
+  expect((await state()).entries[memo.id].path).toBe(entry.path);
+  expect(await rawReadFile(join(root,entry.path),'utf8')).toContain('原文');
+});
+
+test('doctor reports a remotely trashed tracked memo', async () => {
+  const memo = await create(); await link(root,client,scope); await sync(root,client);
+  await client.request(`/api/v1/memos/${memo.id}`,{method:'DELETE'});
+  const report = await doctorWorkspace(root,client);
+  expect(report.issues.some(issue=>issue.id===memo.id&&issue.status==='remote-trashed')).toBe(true);
+  expect((await status(root,client)).some(issue=>issue.id===memo.id&&issue.status==='remote-trashed')).toBe(true);
+});
+
+test('adopt rebuilds a workspace from embedded memo IDs without changing either body', async () => {
+  const memo = await create('same body','nb_child');
+  await mkdir(join(root,'00_system'),{recursive:true});
+  await rawWriteFile(join(root,'00_system','same.md'),encodeNote('same body',memo.id));
+  expect((await adoptWorkspace(root,client)).status).toBe('preview');
+  expect(await rawReadFile(join(root,'.edgeever','state.json'),'utf8').catch(error=>error.code)).toBe('ENOENT');
+  const adopted = await adoptWorkspace(root,client,{run:true});
+  expect(adopted.status).toBe('adopted');
+  expect((await state()).entries[memo.id].path).toBe('00_system/same.md');
+  expect((await client.request(`/api/v1/memos/${memo.id}`)).memo.contentMarkdown).toBe('same body');
+});
+
+test('bootstrap defaults to preview, creates a directory tree once and is idempotent', async () => {
+  await mkdir(join(root,'00_system','docs'),{recursive:true});
+  await rawWriteFile(join(root,'00_system','docs','guide.md'),'guide body');
+  const options={include:['00_system'],journalDirectory:join(root,'.journal')};
+  const preview=await bootstrapWorkspace(root,client,options);
+  expect(preview.status).toBe('preview');
+  expect(await rawReadFile(join(root,'.edgeever','state.json'),'utf8').catch(error=>error.code)).toBe('ENOENT');
+  const first=await bootstrapWorkspace(root,client,{...options,run:true});
+  expect(first.status).toBe('complete');
+  expect(JSON.parse(await rawReadFile(join(root,first.manifest),'utf8')).status).toBe('complete');
+  expect(decodeNote(await rawReadFile(join(root,'00_system','docs','guide.md'),'utf8')).id).toBeTruthy();
+  const second=await bootstrapWorkspace(root,client,{...options,run:true});
+  expect(second.status).toBe('complete');
+  expect(second.results[0].status).toBe('already-tracked');
+});
+
+test('bootstrap binds local attachments then reuses guarded sync for their upload', async () => {
+  await mkdir(join(root,'20_info'),{recursive:true});
+  await rawWriteFile(join(root,'20_info','report.pdf'),Buffer.from('%PDF-bootstrap'));
+  await rawWriteFile(join(root,'20_info','report.md'),'[report](report.pdf)');
+  const result=await bootstrapWorkspace(root,client,{include:['20_info'],run:true,journalDirectory:join(root,'.journal')});
+  expect(result.status).toBe('complete');
+  expect(result.pendingAttachments).toBe(1);
+  const id=decodeNote(await rawReadFile(join(root,'20_info','report.md'),'utf8')).id;
+  expect((await client.request(`/api/v1/memos/${id}`)).memo.contentMarkdown).toMatch(/\/api\/v1\/resources\/[^/]+\/blob/);
+  expect(await readFile(join(root,'20_info','report.md'),'utf8')).toBe('[report](report.pdf)');
+});
+
+test('bootstrap stops after an uncertain create and leaves a resumable manifest', async () => {
+  await mkdir(join(root,'30_daily'),{recursive:true});
+  await rawWriteFile(join(root,'30_daily','one.md'),'one');
+  await rawWriteFile(join(root,'30_daily','two.md'),'two');
+  const uncertain={...client,request:async(path,init)=>{
+    if(path==='/api/v1/memos'&&init?.method==='POST') throw Error('network response uncertain');
+    return client.request(path,init);
+  }};
+  const result=await bootstrapWorkspace(root,uncertain,{include:['30_daily'],run:true,journalDirectory:join(root,'.journal')});
+  expect(result.status).toBe('partial');
+  expect(result.stoppedAt).toMatchObject({phase:'memo',status:'uncertain'});
+  expect(result.results).toHaveLength(1);
+  expect(JSON.parse(await rawReadFile(join(root,result.manifest),'utf8')).stoppedAt.phase).toBe('memo');
+});
+
+test('bootstrap mapping binds only an active same-body memo in the intended notebook', async () => {
+  sqlite.run("INSERT INTO notebooks(id,workspace_id,parent_id,name) VALUES('nb_standard','ws_default',NULL,'50_project')");
+  const same=(await client.request('/api/v1/memos',{method:'POST',body:{notebookId:'nb_standard',title:'same',contentMarkdown:'same body'}})).memo;
+  const different=(await client.request('/api/v1/memos',{method:'POST',body:{notebookId:'nb_standard',title:'different',contentMarkdown:'remote body'}})).memo;
+  await mkdir(join(root,'50_project'),{recursive:true});
+  await rawWriteFile(join(root,'50_project','same.md'),'same body');
+  await rawWriteFile(join(root,'50_project','different.md'),'local body');
+  const mapping=join(root,'mapping.json');
+  await rawWriteFile(mapping,JSON.stringify({version:1,items:{
+    '50_project/same.md':{action:'bind',memoId:same.id},
+    '50_project/different.md':{action:'bind',memoId:different.id},
+  }}));
+  const result=await bootstrapWorkspace(root,client,{include:['50_project'],mappingPath:mapping,run:true,journalDirectory:join(root,'.journal')});
+  expect(result.status).toBe('partial');
+  expect(decodeNote(await rawReadFile(join(root,'50_project','same.md'),'utf8')).id).toBe(same.id);
+  expect(result.results.find(item=>item.path==='50_project/different.md').status).toBe('error');
+  expect(await rawReadFile(join(root,'50_project','different.md'),'utf8')).toBe('local body');
+  expect((await client.request(`/api/v1/memos/${different.id}`)).memo.contentMarkdown).toBe('remote body');
 });
 
 test('pull-only leaves modified file unpushed', async () => {

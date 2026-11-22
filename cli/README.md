@@ -1,6 +1,6 @@
 # EdgeEver CLI for Knowledge Workbench
 
-## Current workflow: CLI 0.8.2
+## Current workflow: CLI 0.9.0
 
 Start with the [EdgeEver CLI and Skill User Guide](../docs/edgeever-cli-skill-guide.md) for first-time setup, multiple tokens, single-note operations, and agent-skill usage. This README retains the full command, upgrade, and implementation reference.
 
@@ -13,6 +13,21 @@ edgeever sync --auto-merge --json
 ```
 
 The CLI discovers the nearest workspace upward and selects the unique authenticated profile whose server URL matches its index. Ambiguous/missing profiles require an explicit --profile or local configuration. Environment overrides still apply and workspace identity is checked. Human output summarizes the single run; --json includes counts and issues. Untracked files are reported, never automatically inspected/imported. Auto-merge is opt-in; ordinary sync still uploads local edits and downloads remote changes. No background watcher is added.
+
+### Tree bootstrap, diagnostics, adoption, and trash
+
+```bash
+# Preview by default; add --run to perform the initial tree import
+edgeever --profile cloud workspace bootstrap ./my-system --include 00_system,10_mind,20_info
+edgeever --profile cloud workspace bootstrap ./my-system --include 00_system,10_mind,20_info --run
+edgeever --profile cloud workspace doctor ./my-system
+# New Git clone or lost state: preview, then add --run to rebuild state
+edgeever --profile cloud workspace adopt ./my-system
+# Preview by default; a newer remote also requires --force
+edgeever --profile cloud workspace trash ./my-system --memo MEMO_ID --run
+```
+
+Bootstrap handles only explicitly included Markdown trees. It never deletes or moves cloud notes and never binds by title; `--mapping` explicitly selects bind/create/skip. Doctor reads local and remote identity, versions, paths, attachments, and unsupported items. Adopt rebuilds state from real memo IDs and turns divergent bodies into conflicts. Never-imported files can be deleted locally. A missing tracked file remains missing-local: restore it with `resolve --use remote`, or explicitly move its cloud memo to the existing trash with workspace trash. The CLI exposes no permanent delete. See the [MySystem workspace plan](../docs/my-system-workspace-v1-plan.md).
 
 ### Upgrade once: reference-only state v4
 
@@ -65,7 +80,7 @@ From this directory:
 npm ci
 npm test
 npm pack --pack-destination /tmp
-npm install -g /tmp/knowledge-workbench-edgeever-cli-0.8.2.tgz
+npm install -g /tmp/knowledge-workbench-edgeever-cli-0.9.0.tgz
 edgeever --help
 ```
 
@@ -82,6 +97,7 @@ edgeever --profile cloud update memo_id --body-file ./note.md
 edgeever --profile cloud workspace link ./notes --notebooks nb_id
 edgeever --profile cloud workspace sync ./notes --pull-only
 edgeever workspace status ./notes
+edgeever --profile cloud workspace status ./notes --remote
 # After editing local files, review before uploading:
 edgeever --profile cloud workspace sync ./notes --dry-run
 edgeever --profile cloud workspace sync ./notes
@@ -91,7 +107,7 @@ Use the instance base URL, without `/mcp`. Profiles live in `~/.edgeever/config.
 
 Basic commands use the existing REST API. Workspace synchronization requires our server-side `/api/v1/file-workspace` capability with atomic revision writes and attachment synchronization; a stock official image is not assumed to provide it. Required sync scopes: `read:notebooks`, `read:memos`, `write:memos`, `read:resources`, `write:resources`.
 
-Use a different local directory for each server/workspace. Local new Markdown files require explicit `workspace import`; deletions are not propagated; synchronization is manual. Exit codes: 0 success, 1 error, 2 reported synchronization conflicts. Run `edgeever --help` for all commands.
+Use a different local directory for each server/workspace. Ordinary new Markdown files require explicit `workspace import`; initial trees use the preview-first `workspace bootstrap`. Deleting an untracked file has no cloud effect, while a tracked memo reaches the cloud trash only through explicit `workspace trash`. Synchronization is manual. Exit codes: 0 success, 1 error, 2 reported actionable findings. Run `edgeever --help` for all commands.
 
 ## Development and verification
 
