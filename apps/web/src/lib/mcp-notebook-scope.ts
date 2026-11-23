@@ -91,3 +91,39 @@ export const toggleNotebookScopeRoot = (
   if (state.explicit) return normalized.filter((id) => id !== notebookId);
   return normalizeNotebookScopeRoots(notebooks, [...normalized, notebookId]);
 };
+
+export const filterNotebooksByScopeRoots = (
+  notebooks: Notebook[],
+  rootIds: string[],
+) => {
+  const normalized = normalizeNotebookScopeRoots(notebooks, rootIds);
+  if (normalized.length === 0) return notebooks;
+
+  const byParent = new Map<string | null, string[]>();
+  const byId = new Map(notebooks.map((notebook) => [notebook.id, notebook]));
+  for (const notebook of notebooks) {
+    const siblings = byParent.get(notebook.parentId) ?? [];
+    siblings.push(notebook.id);
+    byParent.set(notebook.parentId, siblings);
+  }
+
+  const visibleIds = new Set<string>();
+  const includeDescendants = (notebookId: string) => {
+    if (visibleIds.has(notebookId)) return;
+    visibleIds.add(notebookId);
+    for (const childId of byParent.get(notebookId) ?? []) includeDescendants(childId);
+  };
+
+  for (const rootId of normalized) {
+    includeDescendants(rootId);
+    const visited = new Set<string>();
+    let parentId = byId.get(rootId)?.parentId ?? null;
+    while (parentId && !visited.has(parentId)) {
+      visibleIds.add(parentId);
+      visited.add(parentId);
+      parentId = byId.get(parentId)?.parentId ?? null;
+    }
+  }
+
+  return notebooks.filter((notebook) => visibleIds.has(notebook.id));
+};

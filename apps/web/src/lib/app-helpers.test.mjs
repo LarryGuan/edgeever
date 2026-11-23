@@ -66,6 +66,7 @@ import {
   NOTEBOOK_SORT_STORAGE_KEY,
   NOTEBOOK_SECTION_COLLAPSED_STORAGE_KEY,
   NOTEBOOK_TREE_COLLAPSED_IDS_STORAGE_KEY,
+  NOTEBOOK_TREE_SCOPE_IDS_STORAGE_KEY,
   SHORTCUT_SETTINGS_STORAGE_KEY,
   getSearchShortcutScope,
   getMaxMemoListWidthForViewport,
@@ -86,6 +87,7 @@ import {
   readNotebookSortPreference,
   readNotebookSectionCollapsedPreference,
   readNotebookTreeCollapsedIdsPreference,
+  readNotebookTreeScopeIdsPreference,
   readDesktopFocusModePreference,
   readDesktopReadingProtectionPreference,
   readNotebookSidebarCollapsedPreference,
@@ -100,6 +102,7 @@ import {
   writeNotebookSortPreference,
   writeNotebookSectionCollapsedPreference,
   writeNotebookTreeCollapsedIdsPreference,
+  writeNotebookTreeScopeIdsPreference,
   writeDesktopFocusModePreference,
   writeDesktopReadingProtectionPreference,
   writeNotebookSidebarCollapsedPreference,
@@ -562,6 +565,18 @@ describe("notebook tree collapsed preference", () => {
 
     expect(readNotebookTreeCollapsedIdsPreference()).toEqual(new Set());
     expect(() => writeNotebookTreeCollapsedIdsPreference(["notebook-1"])).not.toThrow();
+  });
+
+  test("round-trips the visible notebook scope roots", () => {
+    const values = installLocalStorage();
+
+    writeNotebookTreeScopeIdsPreference(["notebook-2", "notebook-1", "notebook-2"]);
+
+    expect(values.get(NOTEBOOK_TREE_SCOPE_IDS_STORAGE_KEY)).toBe('["notebook-2","notebook-1"]');
+    expect(readNotebookTreeScopeIdsPreference()).toEqual(["notebook-2", "notebook-1"]);
+
+    values.set(NOTEBOOK_TREE_SCOPE_IDS_STORAGE_KEY, JSON.stringify(["notebook-1", "", null, 2]));
+    expect(readNotebookTreeScopeIdsPreference()).toEqual(["notebook-1"]);
   });
 
   test("remembers whether the notebook section itself is collapsed", () => {

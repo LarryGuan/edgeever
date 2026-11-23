@@ -5,6 +5,9 @@ import * as m from "motion/react-m";
 import {
   ChevronLeft,
   ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
   ChevronsLeft,
   ChevronsRight,
   Plus,
@@ -39,6 +42,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NotebookTreeItem } from "./NotebookTreeItem";
@@ -56,11 +60,20 @@ import {
   hasEdgeEverDragData,
   readNotebookSectionCollapsedPreference,
   readNotebookTreeCollapsedIdsPreference,
+  readNotebookTreeScopeIdsPreference,
   readNotebookSortPreference,
   writeNotebookSectionCollapsedPreference,
   writeNotebookTreeCollapsedIdsPreference,
+  writeNotebookTreeScopeIdsPreference,
   writeNotebookSortPreference,
 } from "@/lib/app-helpers";
+import {
+  filterNotebooksByScopeRoots,
+  getNotebookScopeSelectionState,
+  getVisibleNotebookScopeOptions,
+  normalizeNotebookScopeRoots,
+  toggleNotebookScopeRoot,
+} from "@/lib/mcp-notebook-scope";
 import type { EdgeEverRepository } from "@/lib/repository";
 import type { EdgeEverPluginHost, RegisteredPluginPanel } from "@/lib/plugins/plugin-host";
 import { statusSettleMotion } from "@/lib/motion";
@@ -572,6 +585,8 @@ export const NotebookPane = ({
   const [expandSiblingsRequest, setExpandSiblingsRequest] = useState<{ parentId: string | null; token: number } | null>(null);
   const [notebookSortMode, setNotebookSortMode] = useState<NotebookSortMode>(readNotebookSortPreference);
   const [collapsedNotebookIds, setCollapsedNotebookIds] = useState<Set<string>>(readNotebookTreeCollapsedIdsPreference);
+  const [notebookScopeRootIds, setNotebookScopeRootIds] = useState<string[]>(readNotebookTreeScopeIdsPreference);
+  const [expandedScopeIds, setExpandedScopeIds] = useState<string[]>([]);
   const [notebookSectionCollapsed, setNotebookSectionCollapsed] = useState(readNotebookSectionCollapsedPreference);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<RegisteredPluginPanel | null>(null);
 
@@ -648,6 +663,14 @@ export const NotebookPane = ({
 
   const notebooks = notebooksQuery.data?.notebooks ?? [];
   const notebookSortOptions = useMemo(() => getNotebookSortOptions(t), [t]);
+  const visibleNotebooks = useMemo(
+    () => filterNotebooksByScopeRoots(notebooks, notebookScopeRootIds),
+    [notebooks, notebookScopeRootIds],
+  );
+  const notebookScopeOptions = useMemo(
+    () => getVisibleNotebookScopeOptions(notebooks, expandedScopeIds),
+    [expandedScopeIds, notebooks],
+  );
   const notebookSharesQuery = useQuery({
     queryKey: ["notebook-shares", getConfiguredDesktopApiBaseUrl(), user?.id],
     queryFn: () => api.listNotebookShares(),
@@ -656,9 +679,21 @@ export const NotebookPane = ({
     refetchOnMount: "always",
   });
   const sharedNotebookIds = useMemo(() => new Set(notebookSharesQuery.data?.shares.map(share => share.notebookId) ?? []), [notebookSharesQuery.data]);
-  const tree = useMemo(() => buildNotebookTree(notebooks, getNotebookSortComparator(notebookSortMode)), [notebooks, notebookSortMode]);
+  const tree = useMemo(() => buildNotebookTree(visibleNotebooks, getNotebookSortComparator(notebookSortMode)), [visibleNotebooks, notebookSortMode]);
+  const branchNotebookIds = useMemo(() => {
+    const ids: string[] = [];
+    const visit = (nodes: typeof tree) => {
+      for (const node of nodes) {
+        if (node.children.length === 0) continue;
+        ids.push(node.id);
+        visit(node.children);
+      }
+    };
+    visit(tree);
+    return ids;
+  }, [tree]);
+  const allNotebookBranchesCollapsed = branchNotebookIds.length > 0 && branchNotebookIds.every((id) => collapsedNotebookIds.has(id));
   const isLoading = notebooksQuery.isLoading;
-  const activeNotebookSortLabel = notebookSortOptions.find((option) => option.value === notebookSortMode)?.label ?? t("options.notebookSort.nameAsc");
 
   useEffect(() => {
     writeNotebookSortPreference(notebookSortMode);
@@ -667,6 +702,18 @@ export const NotebookPane = ({
   useEffect(() => {
     writeNotebookTreeCollapsedIdsPreference(collapsedNotebookIds);
   }, [collapsedNotebookIds]);
+
+  useEffect(() => {
+    writeNotebookTreeScopeIdsPreference(notebookScopeRootIds);
+  }, [notebookScopeRootIds]);
+
+  useEffect(() => {
+    if (!notebooksQuery.data) return;
+    setNotebookScopeRootIds((current) => {
+      const normalized = normalizeNotebookScopeRoots(notebooks, current);
+      return normalized.length === current.length && normalized.every((id, index) => id === current[index]) ? current : normalized;
+    });
+  }, [notebooks, notebooksQuery.data]);
 
   useEffect(() => {
     writeNotebookSectionCollapsedPreference(notebookSectionCollapsed);
@@ -696,6 +743,25 @@ export const NotebookPane = ({
       return next;
     });
   }, []);
+
+  const handleToggleAllNotebookBranches = useCallback(() => {
+    setCollapsedNotebookIds((current) => {
+      const next = new Set(current);
+      for (const notebookId of branchNotebookIds) {
+        if (allNotebookBranchesCollapsed) next.delete(notebookId);
+        else next.add(notebookId);
+      }
+      return next;
+    });
+  }, [allNotebookBranchesCollapsed, branchNotebookIds]);
+
+  const handleNotebookScopeChange = useCallback((nextRootIds: string[]) => {
+    const normalized = normalizeNotebookScopeRoots(notebooks, nextRootIds);
+    setNotebookScopeRootIds(normalized);
+    if (selectedNotebookId && !filterNotebooksByScopeRoots(notebooks, normalized).some((notebook) => notebook.id === selectedNotebookId)) {
+      onBackToList();
+    }
+  }, [notebooks, onBackToList, selectedNotebookId]);
 
   useEffect(() => {
     if (!selectedNotebookId) {
@@ -846,6 +912,17 @@ export const NotebookPane = ({
             toggleLabel={t(notebookSectionCollapsed ? "notebookPane.expandNotebooks" : "notebookPane.collapseNotebooks")}
           />
           <div className="flex items-center gap-1 opacity-100 transition-opacity duration-200 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100">
+            {branchNotebookIds.length > 0 ? (
+              <button
+                className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/70"
+                type="button"
+                title={t(allNotebookBranchesCollapsed ? "notebookPane.expandAllNotebookBranches" : "notebookPane.collapseAllNotebookBranches")}
+                aria-label={t(allNotebookBranchesCollapsed ? "notebookPane.expandAllNotebookBranches" : "notebookPane.collapseAllNotebookBranches")}
+                onClick={handleToggleAllNotebookBranches}
+              >
+                {allNotebookBranchesCollapsed ? <ChevronsDown className="h-3.5 w-3.5" /> : <ChevronsUp className="h-3.5 w-3.5" />}
+              </button>
+            ) : null}
             <button
               className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/70"
               type="button"
@@ -855,7 +932,7 @@ export const NotebookPane = ({
             >
               <BookPlus className="h-3.5 w-3.5" />
             </button>
-            <DropdownMenu>
+            <DropdownMenu onOpenChange={(open) => { if (open) setExpandedScopeIds([]); }}>
               <TooltipProvider delayDuration={0} skipDelayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -863,23 +940,78 @@ export const NotebookPane = ({
                       <button
                         className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/70"
                         type="button"
-                        aria-label={t("notebookPane.sortTitle", { label: activeNotebookSortLabel })}
+                        aria-label={t("notebookPane.displayOptions")}
                       >
-                        <ArrowDownWideNarrow className="h-3.5 w-3.5" />
+                        <span className="relative">
+                          <ArrowDownWideNarrow className="h-3.5 w-3.5" />
+                          {notebookScopeRootIds.length > 0 ? <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-emerald-500" /> : null}
+                        </span>
                       </button>
                     </DropdownMenuTrigger>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {t("notebookPane.sortTitle", { label: activeNotebookSortLabel })}
+                    {notebookScopeRootIds.length > 0
+                      ? t("notebookPane.selectedNotebookScopes", { count: notebookScopeRootIds.length })
+                      : t("notebookPane.displayOptions")}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              <DropdownMenuContent align="end" className="w-36">
+              <DropdownMenuContent align="end" className="max-h-96 w-72 overflow-y-auto">
+                <div className="px-2 py-1.5 text-xs font-medium text-slate-500">{t("notebookPane.visibleRange")}</div>
+                <DropdownMenuCheckboxItem
+                  checked={notebookScopeRootIds.length === 0}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={() => handleNotebookScopeChange([])}
+                >
+                  {t("notebookPane.allNotebooks")}
+                </DropdownMenuCheckboxItem>
+                {notebookScopeOptions.map((option) => {
+                  const expanded = expandedScopeIds.includes(option.id);
+                  const state = getNotebookScopeSelectionState(notebooks, notebookScopeRootIds, option.id);
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={option.id}
+                      checked={state.indeterminate ? "indeterminate" : state.checked}
+                      aria-disabled={state.inherited}
+                      className="pr-2"
+                      style={{ paddingLeft: `${32 + option.depth * 16}px` }}
+                      onSelect={(event) => event.preventDefault()}
+                      onCheckedChange={() => handleNotebookScopeChange(toggleNotebookScopeRoot(notebooks, notebookScopeRootIds, option.id))}
+                    >
+                      {option.hasChildren ? (
+                        <button
+                          type="button"
+                          className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-slate-500 hover:bg-slate-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20"
+                          aria-expanded={expanded}
+                          aria-label={t(expanded ? "notebookPane.collapseNotebook" : "notebookPane.expandNotebook", { name: option.name })}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onPointerUp={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setExpandedScopeIds((current) => expanded ? current.filter((id) => id !== option.id) : [...current, option.id]);
+                          }}
+                        >
+                          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+                      ) : (
+                        <span className="mr-1 h-5 w-5 shrink-0" aria-hidden="true" />
+                      )}
+                      <span className="truncate">{option.name}</span>
+                      {state.inherited ? <span className="ml-auto text-[10px] text-slate-400">{t("notebookPane.inheritedScope")}</span> : null}
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-xs font-medium text-slate-500">{t("notebookPane.sortSection")}</div>
                 {notebookSortOptions.map((option) => (
                   <DropdownMenuCheckboxItem
                     key={option.value}
                     checked={notebookSortMode === option.value}
-                    onSelect={() => setNotebookSortMode(option.value)}
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setNotebookSortMode(option.value);
+                    }}
                   >
                     {option.label}
                   </DropdownMenuCheckboxItem>

@@ -134,6 +134,16 @@ describe("NotebookPane tree expansion persistence", () => {
       expect(catalog).toContain("expandNotebooks:");
     }
   });
+
+  test("supports collapsing all branches and filtering the tree with MCP scope semantics", () => {
+    expect(source).toContain("handleToggleAllNotebookBranches");
+    expect(source).toContain("filterNotebooksByScopeRoots");
+    expect(source).toContain("toggleNotebookScopeRoot");
+    expect(source).toContain("readNotebookTreeScopeIdsPreference");
+    expect(source).toContain("writeNotebookTreeScopeIdsPreference(notebookScopeRootIds)");
+    expect(source).toContain('t("notebookPane.visibleRange")');
+    expect(source).toContain('t("notebookPane.allNotebooks")');
+  });
 });
 
 describe("NotebookPane client downloads", () => {

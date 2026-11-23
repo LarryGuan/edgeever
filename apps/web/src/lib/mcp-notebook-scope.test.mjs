@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  filterNotebooksByScopeRoots,
   getNotebookScopeSelectionState,
   getVisibleNotebookScopeOptions,
   normalizeNotebookScopeRoots,
@@ -48,5 +49,14 @@ describe("MCP notebook scope picker", () => {
       .toEqual(["work", "projects", "personal"]);
     expect(getVisibleNotebookScopeOptions(notebooks, ["work", "projects"]).map((option) => option.id))
       .toEqual(["work", "projects", "alpha", "personal"]);
+  });
+
+  test("filters the notebook tree to selected subtrees while retaining their ancestors", () => {
+    expect(filterNotebooksByScopeRoots(notebooks, ["alpha"]).map((item) => item.id))
+      .toEqual(["work", "projects", "alpha"]);
+    expect(filterNotebooksByScopeRoots(notebooks, ["projects", "personal"]).map((item) => item.id))
+      .toEqual(["work", "projects", "alpha", "personal"]);
+    expect(filterNotebooksByScopeRoots(notebooks, []).map((item) => item.id))
+      .toEqual(notebooks.map((item) => item.id));
   });
 });
