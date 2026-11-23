@@ -110,10 +110,10 @@ const readTextSetting = async (context, key, fallback) => {
 
 export const readConfig = async (context) => {
   const [rootPath, notebookPattern, noteTitlePattern, weekStartsOn, timezone] = await Promise.all([
-    readTextSetting(context, "rootPath", DEFAULTS.rootPath),
-    readTextSetting(context, "notebookPattern", DEFAULTS.notebookPattern),
-    readTextSetting(context, "noteTitlePattern", DEFAULTS.noteTitlePattern),
-    readTextSetting(context, "weekStartsOn", DEFAULTS.weekStartsOn),
+    readTextSetting(context, "root_path", DEFAULTS.rootPath),
+    readTextSetting(context, "notebook_pattern", DEFAULTS.notebookPattern),
+    readTextSetting(context, "note_title_pattern", DEFAULTS.noteTitlePattern),
+    readTextSetting(context, "week_starts_on", DEFAULTS.weekStartsOn),
     readTextSetting(context, "timezone", DEFAULTS.timezone),
   ]);
   if (!notebookPattern.includes("YYYY") || !notebookPattern.includes("MM") || !notebookPattern.includes("DD")) {

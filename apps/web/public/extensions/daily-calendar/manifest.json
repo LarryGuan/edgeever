@@ -27,7 +27,7 @@
   "settings": {
     "fields": [
       {
-        "key": "rootPath",
+        "key": "root_path",
         "type": "text",
         "label": "Root notebook path",
         "description": "Existing matching notebooks are reused. Missing notebooks are created only after clicking a date.",
@@ -41,7 +41,7 @@
         }
       },
       {
-        "key": "notebookPattern",
+        "key": "notebook_pattern",
         "type": "text",
         "label": "Date notebook pattern",
         "description": "Use YYYY, MM and DD tokens. Separate notebook levels with /.",
@@ -55,7 +55,7 @@
         }
       },
       {
-        "key": "noteTitlePattern",
+        "key": "note_title_pattern",
         "type": "text",
         "label": "Daily note title",
         "description": "The exact title used to find or create the daily note.",
@@ -69,7 +69,7 @@
         }
       },
       {
-        "key": "weekStartsOn",
+        "key": "week_starts_on",
         "type": "select",
         "label": "Week starts on",
         "default": "monday",

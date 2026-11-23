@@ -25,6 +25,14 @@ export interface ResolvedPluginMarketplace extends MarketplaceRegistry {
   resolutionErrors: Record<string, string>;
 }
 
+export const loadBundledPluginMarketplace = async (
+  registryUrl = DEFAULT_PLUGIN_REGISTRY_URL,
+  request: typeof fetch = window.fetch.bind(window),
+): Promise<ResolvedPluginMarketplace> => ({
+  ...await loadPluginMarketplace(registryUrl, request),
+  resolutionErrors: {},
+});
+
 const withManifestMetadata = (
   entry: MarketplaceEntry,
   manifest: Awaited<ReturnType<typeof loadGithubInstallableManifest>>["manifest"],

@@ -82,6 +82,24 @@ beforeAll(() => {
 afterAll(() => { restoreGithubInstance?.(); });
 
 describe("signed community registry", () => {
+  test("shows the bundled catalog without waiting for live GitHub resolution", async () => {
+    const requested = [];
+    const result = await loadDisplayPluginMarketplace({
+      resolveOfficial: false,
+      request: async (input) => {
+        requested.push(String(input));
+        return bundledRequest(input);
+      },
+      storage: createMemoryCommunityRegistryStorage(),
+      publicKeys: [],
+      instanceKey: "https://official.example",
+    });
+
+    expect(result.entries.map((entry) => entry.id)).toEqual(["org.edgeever.tasks"]);
+    expect(requested).toHaveLength(1);
+    expect(requested[0]).toContain("registry.json");
+  });
+
   test("merges a verified catalog and keeps it when a later signature fails", async () => {
     const { raw, privateKey } = signingKey();
     const storage = createMemoryCommunityRegistryStorage();

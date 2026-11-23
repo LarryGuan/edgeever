@@ -16,6 +16,7 @@ import {
   type CommunityRegistryStorage,
 } from "@/lib/plugins/community-registry-store";
 import {
+  loadBundledPluginMarketplace,
   loadResolvedPluginMarketplace,
   type ResolvedPluginMarketplace,
 } from "@/lib/plugins/plugin-marketplace";
@@ -106,6 +107,7 @@ const fetchCommunityRegistryFromInstance = () => api.getCommunityPluginRegistry(
 
 export const loadDisplayPluginMarketplace = async ({
   refreshCommunity = false,
+  resolveOfficial = true,
   request,
   downloadAssetBytes,
   fetchCommunityRegistry = fetchCommunityRegistryFromInstance,
@@ -114,6 +116,7 @@ export const loadDisplayPluginMarketplace = async ({
   instanceKey = communityRegistryInstanceKey(),
 }: {
   refreshCommunity?: boolean;
+  resolveOfficial?: boolean;
   request?: typeof fetch;
   downloadAssetBytes?: GithubAssetDownloader;
   fetchCommunityRegistry?: () => Promise<SignedCommunityRegistry | null>;
@@ -121,7 +124,9 @@ export const loadDisplayPluginMarketplace = async ({
   publicKeys?: readonly Uint8Array[];
   instanceKey?: string;
 } = {}): Promise<DisplayPluginMarketplace> => {
-  const bundled = await loadResolvedPluginMarketplace(undefined, request, downloadAssetBytes);
+  const bundled = resolveOfficial
+    ? await loadResolvedPluginMarketplace(undefined, request, downloadAssetBytes)
+    : await loadBundledPluginMarketplace(undefined, request);
   const revocations = await readRevocationsSafely(storage);
   const cached = () => readVerifiedCachedRegistry(storage, instanceKey, publicKeys);
 

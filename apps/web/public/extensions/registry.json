@@ -23,8 +23,8 @@
       "verification": {
         "version": "1.0.0",
         "checksums": {
-          "manifestJson": "96dca9d3ea6afa144b3e1493c33eddf63ebde141b1c336fca6eb9d36d50c4f27",
-          "mainJs": "2f64a32da036ce8cb59046ec4c2e7944907a520a74b2dfb89eabc3025e9990f1",
+          "manifestJson": "99b8829079b4039b9b75ca007d9f7405f7de22ddbabeb70ab89e3c83e19f4105",
+          "mainJs": "85e30cd91d70ffb5d5c453411d6fc0a317ba2ea52fdcb0dc5eaf9b0e4eba7c8d",
           "stylesCss": "aff126c61f4ae67269212613aa3576eff2280f0ccbec3877d06c5a19f63fbd22"
         }
       }

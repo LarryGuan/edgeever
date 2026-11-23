@@ -494,13 +494,15 @@ await context.ui.panels.open("task-dashboard", { state: { initialTab: "all" } })
 
 EdgeEver 由宿主统一渲染插件设置界面。在 `manifest.json` 中声明配置字段，无需手写设置页 UI：
 
+设置键必须以小写字母开头，并且只能包含小写字母、数字、点、连字符或下划线。
+
 ```json
 {
   "settings": {
     "fields": [
       { "key": "endpoint", "type": "text", "label": "API 地址", "required": true },
       { "key": "token", "type": "secret", "label": "API Token", "required": true },
-      { "key": "autoSync", "type": "boolean", "label": "自动同步", "default": true },
+      { "key": "auto_sync", "type": "boolean", "label": "自动同步", "default": true },
       {
         "key": "mode",
         "type": "select",
@@ -525,8 +527,8 @@ const token = await context.settings.get<string>("token");
 
 // 监听当前插件设置变更
 context.events.on("settings.changed", async ({ key }) => {
-  if (key === "autoSync") {
-    const autoSync = await context.settings.get<boolean>("autoSync");
+  if (key === "auto_sync") {
+    const autoSync = await context.settings.get<boolean>("auto_sync");
     // 更新逻辑
   }
 });

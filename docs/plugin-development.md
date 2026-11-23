@@ -494,13 +494,15 @@ await context.ui.panels.open("task-dashboard", { state: { initialTab: "all" } })
 
 Declare settings fields in `manifest.json`; EdgeEver renders the settings UI automatically:
 
+Setting keys must start with a lowercase letter and may contain only lowercase letters, numbers, dots, dashes, or underscores.
+
 ```json
 {
   "settings": {
     "fields": [
       { "key": "endpoint", "type": "text", "label": "API Endpoint", "required": true },
       { "key": "token", "type": "secret", "label": "API Token", "required": true },
-      { "key": "autoSync", "type": "boolean", "label": "Auto Sync", "default": true },
+      { "key": "auto_sync", "type": "boolean", "label": "Auto Sync", "default": true },
       {
         "key": "mode",
         "type": "select",
@@ -525,8 +527,8 @@ const token = await context.settings.get<string>("token");
 
 // Listen for setting changes
 context.events.on("settings.changed", async ({ key }) => {
-  if (key === "autoSync") {
-    const autoSync = await context.settings.get<boolean>("autoSync");
+  if (key === "auto_sync") {
+    const autoSync = await context.settings.get<boolean>("auto_sync");
     // Update logic
   }
 });

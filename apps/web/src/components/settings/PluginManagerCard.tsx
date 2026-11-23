@@ -327,7 +327,7 @@ export const PluginManagerCard = ({
   const [refreshingMarketplace, setRefreshingMarketplace] = useState(false);
   const marketplaceQuery = useQuery({
     queryKey: ["plugin-marketplace", "v2"],
-    queryFn: () => loadDisplayPluginMarketplace({ refreshCommunity: false }),
+    queryFn: () => loadDisplayPluginMarketplace({ refreshCommunity: false, resolveOfficial: false }),
     staleTime: 5 * 60_000,
   });
   useEffect(() => {
@@ -624,7 +624,11 @@ export const PluginManagerCard = ({
           </Button>
         </div>
 
-        {(marketplaceQuery.isLoading || snapshot.catalogErrors.length > 0) && catalogItems.length === 0 ? null : catalogItems.length === 0 ? (
+        {marketplaceQuery.isLoading && catalogItems.length === 0 ? (
+          <div role="status" className="rounded-lg border border-dashed border-slate-200 p-5 text-center text-xs text-slate-500">
+            {t("plugins.marketplace.loading")}
+          </div>
+        ) : snapshot.catalogErrors.length > 0 && catalogItems.length === 0 ? null : catalogItems.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 p-5 text-center text-xs text-slate-500">
             {t("plugins.empty")}
           </div>

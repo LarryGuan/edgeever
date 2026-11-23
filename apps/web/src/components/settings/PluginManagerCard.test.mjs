@@ -53,6 +53,13 @@ describe("plugin manager card layout", () => {
     expect(source).toContain('t("plugins.marketplace.loadFailed"');
     expect(source).toContain("marketplaceQuery.refetch()");
   });
+
+  test("renders the bundled catalog first and keeps slow online resolution in the background", () => {
+    expect(source).toContain("refreshCommunity: false, resolveOfficial: false");
+    expect(source).toContain('role="status"');
+    expect(source).toContain('t("plugins.marketplace.loading")');
+    expect(source).toContain("loadDisplayPluginMarketplace({ refreshCommunity: true })");
+  });
 });
 
 test("shows per-plugin restore errors with a retry instead of an empty installed list", () => {

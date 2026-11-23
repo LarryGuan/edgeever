@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { parseExtensionManifest } from "@edgeever/plugin-api";
 import {
   buildCalendarCells,
   buildDatePath,
@@ -10,6 +11,17 @@ import {
 } from "../../../public/extensions/daily-calendar/main.js";
 
 describe("Daily Calendar plugin", () => {
+  test("ships a manifest accepted by the plugin API", async () => {
+    const manifest = parseExtensionManifest(await Bun.file(new URL("../../../public/extensions/daily-calendar/manifest.json", import.meta.url)).json());
+    expect(manifest.settings?.fields.map((field) => field.key)).toEqual([
+      "root_path",
+      "notebook_pattern",
+      "note_title_pattern",
+      "week_starts_on",
+      "timezone",
+    ]);
+  });
+
   test("expands the standard MySystem daily path", () => {
     const parts = dateParts(2026, 11, 23);
     expect(formatDatePattern("YYYY-MM-DD", parts)).toBe("2026-11-23");
