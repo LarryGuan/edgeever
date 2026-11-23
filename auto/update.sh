@@ -150,12 +150,19 @@ resolve_cli_installation() {
 }
 
 remote_main_sha() {
-  local result sha
-  if ! result="$(run_with_timeout 15 env GIT_TERMINAL_PROMPT=0 git \
-    -c http.version=HTTP/1.1 \
-    -C "$REPO_ROOT" ls-remote --exit-code origin refs/heads/main)"; then
-    die "15 秒内无法读取 GitHub main；请检查网络或 Git 凭据后重试"
-  fi
+  local result sha attempt
+  for attempt in 1 2 3; do
+    if result="$(run_with_timeout 15 env GIT_TERMINAL_PROMPT=0 git \
+      -c http.version=HTTP/1.1 \
+      -C "$REPO_ROOT" ls-remote --exit-code origin refs/heads/main)"; then
+      break
+    fi
+    if ((attempt < 3)); then
+      log "读取 GitHub main 失败，正在重试（${attempt}/3）" >&2
+      sleep 2
+    fi
+  done
+  [[ -n "${result:-}" ]] || die "连续 3 次无法读取 GitHub main；请检查网络或 Git 凭据后重试"
   sha="${result%%$'\t'*}"
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || die "GitHub main 返回了无效提交：$sha"
   printf '%s\n' "$sha"
