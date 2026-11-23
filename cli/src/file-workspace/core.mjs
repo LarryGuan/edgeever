@@ -11,6 +11,7 @@ import { attachmentContext, normalizeRemote, relocateAttachments } from './attac
 import { decodeNote, encodeNote } from './metadata.mjs';
 import { scanNotes, availablePath, notebookDirectory, refreshNotebookLayout, readIdentifiedNote } from './layout.mjs';
 import { migrateWorkspace } from './migration.mjs';
+import { listActiveMemos } from './remote.mjs';
 import { moveNote, resumeMove, moveJournal } from './moves.mjs';
 import { mergeText, hasConflictMarkers } from './merge.mjs';
 
@@ -138,20 +139,7 @@ async function locate(root, state, scan, id, dryRun) {
   return { body, raw: body === note.body ? note.raw : encodeNote(body, id), path: note.path };
 }
 async function snapshot(client, selected) {
-  const memos = new Map();
-  for (const notebookId of selected) {
-    let cursor; const seen = new Set();
-    do {
-      const params = new URLSearchParams({ notebookId, limit: '100' });
-      if (cursor) params.set('cursor', cursor);
-      const page = await client.request(`/api/v1/memos?${params}`);
-      for (const memo of page.memos) if (selected.has(memo.notebookId)) memos.set(memo.id, memo);
-      cursor = page.nextCursor;
-      if (cursor && seen.has(cursor)) throw Error('Repeated pagination cursor');
-      if (cursor) seen.add(cursor);
-    } while (cursor);
-  }
-  return memos;
+  return new Map((await listActiveMemos(client, selected)).map(memo => [memo.id, memo]));
 }
 const isDiagram = body => /edgeever.diagram|edgeever-diagram/i.test(body);
 

@@ -5,6 +5,7 @@ import { link, importFile, sync } from './core.mjs';
 import { loadState, saveState } from './state.mjs';
 import { decodeNote } from './metadata.mjs';
 import { atomic, hash, read, safePath } from './files.mjs';
+import { listActiveMemos } from './remote.mjs';
 
 async function scanIncluded(root, includes) {
   const files = [], directories = new Set(), ignoredPaths = new Set(), excluded = { d2: 0, hidden: 0, other: 0 }, issues = [];
@@ -32,21 +33,6 @@ async function scanIncluded(root, includes) {
     }
   }
   return { files: files.sort(), directories: [...directories].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b)), ignoredPaths: [...ignoredPaths], excluded, issues };
-}
-
-async function allMemos(client, notebooks) {
-  const memos = [];
-  for (const notebook of notebooks) {
-    let cursor;
-    do {
-      const params = new URLSearchParams({ notebookId: notebook.id, limit: '100', includeTotal: '0' });
-      if (cursor) params.set('cursor', cursor);
-      const page = await client.request(`/api/v1/memos?${params}`);
-      memos.push(...page.memos);
-      cursor = page.nextCursor;
-    } while (cursor);
-  }
-  return memos;
 }
 
 function notebookPaths(notebooks) {
@@ -81,7 +67,7 @@ export async function bootstrapWorkspace(root, client, { include = [], mappingPa
   const mapping = await readMapping(mappingPath);
   const scan = await scanIncluded(root, include);
   const remote = await client.request('/api/v1/notebooks');
-  const memos = await allMemos(client, remote.notebooks);
+  const memos = await listActiveMemos(client);
   const titles = new Map();
   for (const memo of memos) {
     const key = memo.title || 'untitled';
