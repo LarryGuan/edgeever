@@ -23,7 +23,10 @@ async function scanIncluded(root, includes) {
       else excluded.other++;
     }
   }
-  for (const include of includes) await walk(include);
+  for (const include of includes) {
+    directories.add(include);
+    await walk(include);
+  }
   for (const file of files) {
     let directory = posix.dirname(file);
     while (directory && directory !== '.') {
@@ -120,6 +123,12 @@ export async function bootstrapWorkspace(root, client, { include = [], mappingPa
 
   const directoryIds = new Map();
   for (const path of scan.directories) {
+    const existingNotebookId = existingPaths.byPath.get(path);
+    if (existingNotebookId) {
+      directoryIds.set(path, existingNotebookId);
+      manifest.notebooks[path] = { status: 'complete', notebookId: existingNotebookId, reused: true };
+      continue;
+    }
     const result = await createNotebook(client, { path, parents: true }, journalDirectory || join(root, '.edgeever', 'bootstrap', 'notebook-operations'));
     if (result.status !== 'complete') {
       manifest.status = result.status === 'uncertain' ? 'stopped-uncertain' : 'partial';

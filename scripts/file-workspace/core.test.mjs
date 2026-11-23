@@ -179,6 +179,18 @@ test('bootstrap defaults to preview, creates a directory tree once and is idempo
   expect(second.results[0].status).toBe('already-tracked');
 });
 
+test('bootstrap creates and links an included root even when it contains no Markdown', async () => {
+  await mkdir(join(root,'10_mind'),{recursive:true});
+  const preview=await bootstrapWorkspace(root,client,{include:['10_mind'],journalDirectory:join(root,'.journal')});
+  expect(preview.directories).toBe(1);
+  expect(preview.files).toBe(0);
+  const result=await bootstrapWorkspace(root,client,{include:['10_mind'],run:true,journalDirectory:join(root,'.journal')});
+  expect(result.status).toBe('complete');
+  expect(result.roots).toHaveLength(1);
+  expect(result.results).toHaveLength(0);
+  expect((await client.request('/api/v1/notebooks')).notebooks.some(notebook=>notebook.id===result.roots[0]&&notebook.name==='10_mind')).toBe(true);
+});
+
 test('bootstrap binds local attachments then reuses guarded sync for their upload', async () => {
   await mkdir(join(root,'20_info'),{recursive:true});
   await rawWriteFile(join(root,'20_info','report.pdf'),Buffer.from('%PDF-bootstrap'));
