@@ -1,0 +1,106 @@
+{
+  "type": "plugin",
+  "id": "org.edgeever.daily-calendar",
+  "name": "Daily Calendar",
+  "version": "1.0.0",
+  "apiVersion": "2",
+  "settingsUi": "host",
+  "description": "Open or create daily notes from a rule-driven calendar.",
+  "locales": {
+    "zh-CN": {
+      "name": "Daily 日历",
+      "description": "通过可配置路径规则，从日历打开或创建每日笔记。"
+    }
+  },
+  "author": "EdgeEver",
+  "entry": "./main.js",
+  "platforms": ["web", "desktop"],
+  "permissions": [
+    "notes:read",
+    "notes:write",
+    "metadata:read",
+    "metadata:write",
+    "ui:navigation",
+    "ui:notices",
+    "ui:panels"
+  ],
+  "settings": {
+    "fields": [
+      {
+        "key": "rootPath",
+        "type": "text",
+        "label": "Root notebook path",
+        "description": "Existing matching notebooks are reused. Missing notebooks are created only after clicking a date.",
+        "default": "30_daily",
+        "required": true,
+        "locales": {
+          "zh-CN": {
+            "label": "根笔记本路径",
+            "description": "复用已有的精确路径；只有点击日期时才创建缺失笔记本。"
+          }
+        }
+      },
+      {
+        "key": "notebookPattern",
+        "type": "text",
+        "label": "Date notebook pattern",
+        "description": "Use YYYY, MM and DD tokens. Separate notebook levels with /.",
+        "default": "YYYY/YYYY-MM/YYYY-MM-DD",
+        "required": true,
+        "locales": {
+          "zh-CN": {
+            "label": "日期笔记本规则",
+            "description": "支持 YYYY、MM、DD；使用 / 分隔笔记本层级。"
+          }
+        }
+      },
+      {
+        "key": "noteTitlePattern",
+        "type": "text",
+        "label": "Daily note title",
+        "description": "The exact title used to find or create the daily note.",
+        "default": "YYYY-MM-DD",
+        "required": true,
+        "locales": {
+          "zh-CN": {
+            "label": "每日笔记标题规则",
+            "description": "插件用该标题精确查找或创建每日笔记。"
+          }
+        }
+      },
+      {
+        "key": "weekStartsOn",
+        "type": "select",
+        "label": "Week starts on",
+        "default": "monday",
+        "options": [
+          { "value": "monday", "label": "Monday" },
+          { "value": "sunday", "label": "Sunday" }
+        ],
+        "locales": {
+          "zh-CN": {
+            "label": "每周起始日",
+            "options": {
+              "monday": "周一",
+              "sunday": "周日"
+            }
+          }
+        }
+      },
+      {
+        "key": "timezone",
+        "type": "text",
+        "label": "Time zone",
+        "description": "IANA time zone used to determine today, for example Asia/Shanghai.",
+        "default": "Asia/Shanghai",
+        "required": true,
+        "locales": {
+          "zh-CN": {
+            "label": "时区",
+            "description": "用于判断今天的 IANA 时区，例如 Asia/Shanghai。"
+          }
+        }
+      }
+    ]
+  }
+}

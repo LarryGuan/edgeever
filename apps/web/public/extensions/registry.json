@@ -1,7 +1,34 @@
 {
   "registryVersion": "1",
-  "updatedAt": "2026-09-22T02:31:37.000Z",
+  "updatedAt": "2026-11-23T00:00:00.000Z",
   "entries": [
+    {
+      "id": "org.edgeever.daily-calendar",
+      "name": "Daily Calendar",
+      "description": "Open or create daily notes from a rule-driven calendar.",
+      "locales": {
+        "zh-CN": {
+          "name": "Daily 日历",
+          "description": "通过可配置路径规则，从日历打开或创建每日笔记。"
+        }
+      },
+      "author": "EdgeEver",
+      "publisher": "edgeever",
+      "category": "Productivity",
+      "repositoryUrl": "https://github.com/LarryGuan/edgeever",
+      "distribution": {
+        "type": "manifest",
+        "manifestUrl": "/extensions/daily-calendar/manifest.json"
+      },
+      "verification": {
+        "version": "1.0.0",
+        "checksums": {
+          "manifestJson": "96dca9d3ea6afa144b3e1493c33eddf63ebde141b1c336fca6eb9d36d50c4f27",
+          "mainJs": "2f64a32da036ce8cb59046ec4c2e7944907a520a74b2dfb89eabc3025e9990f1",
+          "stylesCss": "aff126c61f4ae67269212613aa3576eff2280f0ccbec3877d06c5a19f63fbd22"
+        }
+      }
+    },
     {
       "id": "org.edgeever.tasks",
       "name": "EdgeEver Tasks",

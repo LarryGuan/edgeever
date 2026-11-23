@@ -442,14 +442,14 @@ await context.ui.openNote(noteId, { search: "关键定位词" });
 
 ### 7. 自定义面板（Panels）
 
-插件可以注册全屏或对话框形态的原生 DOM 面板：
+插件可以注册对话框、全屏或笔记本侧栏形态的原生 DOM 面板。`sidebar` 在宽屏中停靠到笔记本侧栏，在窄屏中占用笔记本面板的可用空间：
 
 ```ts
 context.ui.panels.register({
   id: "task-dashboard",
   title: "任务仪表盘",
   purpose: "dashboard", // "workflow" | "dashboard" | "preview" | "onboarding"
-  presentation: "dialog", // "dialog" | "fullscreen"
+  presentation: "dialog", // "dialog" | "fullscreen" | "sidebar"
   mount(container, { shell, requestClose, state }) {
     // 1. 使用宿主标准 Shell 控件（页头、搜索栏、分段切换等）
     shell.set({

@@ -442,14 +442,14 @@ await context.ui.openNote(noteId, { search: "search term" });
 
 ### 7. Panels
 
-Register native DOM panels presented as dialogs or full-screen views:
+Register native DOM panels presented as dialogs, full-screen views, or the notebook sidebar. `sidebar` docks in the notebook sidebar on wide screens and uses the notebook pane's available space on narrow screens:
 
 ```ts
 context.ui.panels.register({
   id: "task-dashboard",
   title: "Task Dashboard",
   purpose: "dashboard", // "workflow" | "dashboard" | "preview" | "onboarding"
-  presentation: "dialog", // "dialog" | "fullscreen"
+  presentation: "dialog", // "dialog" | "fullscreen" | "sidebar"
   mount(container, { shell, requestClose, state }) {
     // 1. Use standard host shell controls (header, toolbar, search, tabs)
     shell.set({

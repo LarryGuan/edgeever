@@ -16,6 +16,7 @@ import {
   type PluginNoteRevision,
   type PluginNoteSummary,
   type PluginPanel,
+  type PluginPanelPresentation,
   type PluginOpenNoteOptions,
   type PluginPanelChrome,
   type PluginPanelCloseDecision,
@@ -152,7 +153,7 @@ export interface RegisteredPluginPanel {
   id: string;
   title: string;
   purpose?: "workflow" | "dashboard" | "preview" | "onboarding";
-  presentation: "dialog" | "fullscreen";
+  presentation: PluginPanelPresentation;
 }
 
 export interface RegisteredPluginEmbed {
@@ -1760,7 +1761,9 @@ export class EdgeEverPluginHost {
             if (this.panels.has(key)) throw new Error(`Plugin panel already exists: ${panel.id}`);
             this.panels.set(key, {
               ...panel,
-              presentation: panel.presentation === "fullscreen" ? "fullscreen" : "dialog",
+              presentation: panel.presentation === "fullscreen" || panel.presentation === "sidebar"
+                ? panel.presentation
+                : "dialog",
               pluginId: manifest.id,
             });
             this.refreshSnapshot();
@@ -1897,7 +1900,9 @@ export class EdgeEverPluginHost {
         id,
         title,
         purpose,
-        presentation: presentation === "fullscreen" ? "fullscreen" : "dialog",
+        presentation: presentation === "fullscreen" || presentation === "sidebar"
+          ? presentation
+          : "dialog",
       })),
       embeds: [...this.embeds.values()].map(({ pluginId, type }) => ({ pluginId, type })),
       activeThemeId: this.activeThemeId,

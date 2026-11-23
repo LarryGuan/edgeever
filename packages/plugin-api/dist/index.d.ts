@@ -370,7 +370,7 @@ export interface PluginOpenNoteOptions {
 export type PluginJsonValue = null | boolean | number | string | PluginJsonValue[] | {
     [key: string]: PluginJsonValue;
 };
-export type PluginPanelPresentation = "dialog" | "fullscreen";
+export type PluginPanelPresentation = "dialog" | "fullscreen" | "sidebar";
 export type PluginPanelPurpose = "workflow" | "dashboard" | "preview" | "onboarding";
 export interface PluginPanelOpenOptions {
     state?: PluginJsonValue;

@@ -70,6 +70,31 @@ beforeEach(() => {
 });
 
 describe("EdgeEverPluginHost", () => {
+  test("preserves sidebar presentation for docked plugin panels", async () => {
+    const host = new EdgeEverPluginHost({ repository, scope: "sidebar-panel" });
+    const id = "org.edgeever.sidebar-panel";
+    host.installManifest({
+      type: "plugin",
+      id,
+      name: "Sidebar panel",
+      version: "1.0.0",
+      apiVersion: "2",
+      settingsUi: "host",
+      entry: new URL("./plugin-sidebar.fixture.mjs", import.meta.url).href,
+      permissions: ["ui:panels"],
+    }, "https://example.org/manifest.json");
+
+    await host.setEnabled(id, true);
+    expect(host.getSnapshot().panels).toEqual([{
+      pluginId: id,
+      id: "calendar",
+      title: "Calendar",
+      purpose: "dashboard",
+      presentation: "sidebar",
+    }]);
+    await host.dispose();
+  });
+
   test("rejects custom settings panels for API v2 plugins", async () => {
     const host = new EdgeEverPluginHost({ repository, scope: "settings-policy" });
     const id = "org.edgeever.settings-policy";

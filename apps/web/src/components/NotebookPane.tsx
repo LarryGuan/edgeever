@@ -62,12 +62,13 @@ import {
   writeNotebookSortPreference,
 } from "@/lib/app-helpers";
 import type { EdgeEverRepository } from "@/lib/repository";
-import type { EdgeEverPluginHost } from "@/lib/plugins/plugin-host";
+import type { EdgeEverPluginHost, RegisteredPluginPanel } from "@/lib/plugins/plugin-host";
 import { statusSettleMotion } from "@/lib/motion";
 import { ClientDownloadLinks } from "./ClientDownloadLinks";
 import { DesktopUpdateNotice } from "./DesktopUpdateNotice";
 import { useDeployedUpdateNotice } from "@/hooks/useDeployedUpdateNotice";
 import { PluginToolbarMenu } from "./plugins/PluginToolbarMenu";
+import { PluginSidebarPanel } from "./plugins/PluginSidebarPanel";
 
 const DesktopSyncIssuesDialog = lazy(() => import("./DesktopSyncIssuesDialog").then((module) => ({ default: module.DesktopSyncIssuesDialog })));
 
@@ -572,6 +573,13 @@ export const NotebookPane = ({
   const [notebookSortMode, setNotebookSortMode] = useState<NotebookSortMode>(readNotebookSortPreference);
   const [collapsedNotebookIds, setCollapsedNotebookIds] = useState<Set<string>>(readNotebookTreeCollapsedIdsPreference);
   const [notebookSectionCollapsed, setNotebookSectionCollapsed] = useState(readNotebookSectionCollapsedPreference);
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState<RegisteredPluginPanel | null>(null);
+
+  const closeSidebarPanel = useCallback(() => setActiveSidebarPanel(null), []);
+  const openSidebarPanel = useCallback((panel: RegisteredPluginPanel) => {
+    setActiveSidebarPanel(panel);
+    if (collapsed) onToggleCollapsed?.();
+  }, [collapsed, onToggleCollapsed]);
 
   const handleMoveNotebook = useCallback((notebookId: string, targetNotebookId: string, position: NotebookDropPosition) => {
     setNotebookSortMode("custom");
@@ -729,6 +737,7 @@ export const NotebookPane = ({
           <PluginToolbarMenu
             host={pluginHost}
             onManage={onOpenPluginManager}
+            onOpenSidebarPanel={openSidebarPanel}
             align="start"
             className="h-9 w-full rounded-md px-0 text-slate-600 hover:bg-slate-50 hover:text-slate-950"
           />
@@ -736,6 +745,10 @@ export const NotebookPane = ({
         </nav>
       </TooltipProvider>
 
+      {activeSidebarPanel ? (
+        <PluginSidebarPanel host={pluginHost} panel={activeSidebarPanel} onClose={closeSidebarPanel} />
+      ) : (
+      <>
       {window.edgeeverDesktop?.isAvailable && (
         <div className="px-3 pt-1.5">
           <SyncStatusBar
@@ -906,6 +919,8 @@ export const NotebookPane = ({
         )}
 
       </div>
+      </>
+      )}
       </div>
 
       {collapsed && onToggleCollapsed ? (
@@ -969,6 +984,7 @@ export const NotebookPane = ({
               <PluginToolbarMenu
                 host={pluginHost}
                 onManage={onOpenPluginManager}
+                onOpenSidebarPanel={openSidebarPanel}
                 align="start"
                 side="right"
                 tooltipSide="right"

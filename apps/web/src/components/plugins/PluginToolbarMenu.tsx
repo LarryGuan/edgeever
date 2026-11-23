@@ -25,6 +25,7 @@ const actionKey = (action: RegisteredPluginAction) => `${action.type}:${action.p
 export const PluginToolbarMenu = ({
   host,
   onManage,
+  onOpenSidebarPanel,
   align = "end",
   side = "bottom",
   tooltipSide,
@@ -32,6 +33,7 @@ export const PluginToolbarMenu = ({
 }: {
   host: EdgeEverPluginHost;
   onManage: () => void;
+  onOpenSidebarPanel?: (panel: RegisteredPluginPanel) => void;
   align?: "start" | "center" | "end";
   side?: "top" | "right" | "bottom" | "left";
   tooltipSide?: "top" | "right" | "bottom" | "left";
@@ -60,6 +62,10 @@ export const PluginToolbarMenu = ({
     const panel = snapshot.panels.find((item) => item.pluginId === action.pluginId && item.id === action.id);
     if (!panel) return;
     setOpen(false);
+    if (panel.presentation === "sidebar" && onOpenSidebarPanel) {
+      onOpenSidebarPanel(panel);
+      return;
+    }
     setActivePanel(panel);
   };
 
@@ -113,7 +119,7 @@ export const PluginToolbarMenu = ({
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
                 <Button
-                  className={cn("relative hidden h-8 w-8 text-slate-600 hover:bg-slate-50 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-900/20 lg:inline-flex", className)}
+                  className={cn("relative inline-flex h-8 w-8 text-slate-600 hover:bg-slate-50 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-900/20", className)}
                   size="icon"
                   variant="ghost"
                   aria-label={t("plugins.toolbar.open")}
